@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Chinese Bridge SRS</title>
+  <meta name="theme-color" content="#121212">
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+SC:wght@400;700;900&display=swap" rel="stylesheet">
+  <!-- Firebase SDKs (Compat version for easy integration) -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+</head>
+<body>
+
+  <!-- Login Modal -->
+  <div id="login-modal" class="modal">
+    <div class="modal-content">
+      <h2>Welcome</h2>
+      <p>Enter your username to access your progress.</p>
+      <input type="text" id="username-input" placeholder="Username (e.g., D, T, A)" autocomplete="off">
+      <button id="btn-login" class="btn-primary">Log In & Sync</button>
+      <p id="login-status" class="hidden" style="margin-top: 1rem; color: #f59e0b;">Syncing...</p>
+    </div>
+  </div>
+
+  <!-- Help / Tutorial Modal -->
+  <div id="help-modal" class="modal hidden">
+    <div class="modal-content help-content">
+      <button class="close-modal" id="btn-close-help">×</button>
+      <h2>How to Study</h2>
+      <div class="help-grid">
+        <div class="help-item">
+          <span class="help-icon">📖</span>
+          <div>
+            <h3>Study Mode</h3>
+            <p>Spaced Repetition System (SRS). Focuses on cards you need to review most.</p>
+          </div>
+        </div>
+        <div class="help-item">
+          <span class="help-icon">🏆</span>
+          <div>
+            <h3>Competition Mode</h3>
+            <p>Simulates the real test. No pinyin, no hints, voice response enabled.</p>
+          </div>
+        </div>
+        <div class="help-item">
+          <span class="help-icon">🔲</span>
+          <div>
+            <h3>Question Bank</h3>
+            <p>Click any square to review that specific question immediately.</p>
+          </div>
+        </div>
+      </div>
+      <p class="small-hint">Check the gear icon (⚙️) for Pinyin and Translation settings.</p>
+    </div>
+  </div>
+  <div id="profile-modal" class="modal hidden">
+    <div class="modal-content profile-content">
+      <button class="close-modal" id="btn-close-profile">×</button>
+      <h2>Profile & Data</h2>
+      <p style="margin-bottom: 1rem; font-size: 0.9rem; color: var(--text-secondary);">Manage your local progress and username.</p>
+      
+      <div style="margin-bottom: 1.5rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px;">
+        <h3 style="font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--accent);">MIGRATE USERNAME</h3>
+        <input type="text" id="migrate-username-input" placeholder="New username" autocomplete="off" style="margin-bottom: 0.5rem;">
+        <button id="btn-migrate-username" type="button" class="btn-primary small" style="width: 100%;">Migrate & Keep Backup</button>
+      </div>
+
+      <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+        <button id="btn-export-backup" type="button" class="btn-primary" style="flex: 1; background: #10b981;">⬇️ Export Backup</button>
+        <button id="btn-import-backup" type="button" class="btn-primary" style="flex: 1; background: #f59e0b; color: #121212;">⬆️ Import Backup</button>
+        <input type="file" id="import-file-input" class="hidden" accept=".json">
+      </div>
+      <p class="small-hint">Exporting downloads a .json file containing your progress and settings.</p>
+      
+      <div style="margin-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+        <button id="btn-reset-progress" type="button" class="btn-primary" style="width: 100%; background: #ef4444;">⚠️ Reset All Progress</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="app" class="hidden">
+    <!-- Left Sidebar: Navigation & Progress -->
+    <aside id="sidebar-left" class="sidebar">
+      <div class="sidebar-header">
+        <h2 onclick="goHome()" style="cursor:pointer">Chinese Bridge</h2>
+        <div class="countdown">
+          <span id="days-remaining"></span> days left
+        </div>
+      </div>
+      
+      <div class="sidebar-section">
+        <h3>Mode</h3>
+        <button class="mode-btn" data-mode="study">📖 Study</button>
+        <button class="mode-btn accent" data-mode="test">🏆 Competition</button>
+        <button id="btn-show-help" class="nav-btn small" style="margin-top: 0.5rem; opacity: 0.7;">❓ Help & Tutorial</button>
+      </div>
+
+      <div class="sidebar-section flex-grow">
+        <h3>Question Bank</h3>
+        <div class="srs-stats">
+          <span class="due">Due: <span id="home-due-count">0</span></span>
+          <span class="new">New: <span id="home-new-count">0</span></span>
+        </div>
+        <div id="mastery-grid" class="grid-container small-grid"></div>
+        <div class="grid-legend">
+          <span class="legend-item"><span class="legend-dot new"></span>New</span>
+          <span class="legend-item"><span class="legend-dot weak"></span>Weak</span>
+          <span class="legend-item"><span class="legend-dot learning"></span>Learning</span>
+          <span class="legend-item"><span class="legend-dot mastered"></span>Mastered</span>
+        </div>
+      </div>
+      
+      <div class="sidebar-footer">
+        <p>User: <strong id="display-username" style="cursor:pointer; text-decoration: underline;" title="Click to change username"></strong></p>
+        <button id="btn-logout" class="icon-btn" style="width:100%">Logout & Switch</button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main id="main-content">
+      <header class="mobile-header">
+         <button id="btn-toggle-left" class="icon-btn">☰</button>
+         <span class="header-info">
+           <span id="score-display" class="hidden">Score: <span id="current-score">0</span></span>
+           <span class="countdown-inline"><span id="days-remaining-header"></span>d left</span>
+         </span>
+         <button id="btn-toggle-right" class="icon-btn">⚙️</button>
+      </header>
+
+      <!-- Home Screen -->
+      <div id="view-home" class="view">
+        <div class="hero">
+          <h1>Welcome back.</h1>
+          <p>Select a mode from the sidebar to begin.</p>
+        </div>
+        <div class="quick-stats">
+            <div class="stat-card">
+               <h2 id="stat-mastered">0</h2>
+               <p>Mastered (>3d)</p>
+            </div>
+            <div class="stat-card">
+               <h2 id="stat-learning">0</h2>
+               <p>Learning</p>
+            </div>
+        </div>
+      </div>
+      
+      <!-- Admin View -->
+      <div id="view-admin" class="view hidden">
+        <div class="admin-header">
+          <h1>Admin Dashboard</h1>
+          <button id="btn-admin-refresh" class="btn-primary small">Refresh Data</button>
+        </div>
+        <div id="admin-user-list" class="admin-list">
+          <!-- User rows injected here -->
+        </div>
+      </div>
+
+      <!-- Quiz Screen -->
+      <div id="view-quiz" class="view hidden">
+        <div id="card" class="card">
+          <div class="question-section">
+            <div class="question-text-wrapper">
+              <span id="question-id-label" class="hidden" style="font-size: 0.8rem; opacity: 0.5; margin-bottom: 0.2rem; display: block;">Question #1</span>
+              <div id="question-pinyin" class="hidden"></div>
+              <h1 id="question-text"></h1>
+            </div>
+            <div class="question-controls">
+              <button id="btn-tts-question" class="icon-btn" title="Listen to Question (TTS)">
+                <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" stroke-width="2" fill="none"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+              </button>
+              <button id="btn-skip" class="icon-btn secondary" title="Skip Question">
+                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg>
+              </button>
+            </div>
+          </div>
+
+          <div id="translation-section" class="hidden">
+            <p id="question-translation"></p>
+          </div>
+
+          <div id="options-container" class="options">
+            <!-- Options will be injected here -->
+          </div>
+
+          <div id="confirm-section" class="hidden">
+             <button id="btn-submit-answer" class="btn-primary">Submit Answer</button>
+          </div>
+
+          <div id="feedback-section" class="hidden">
+            <div class="feedback-audio">
+               <button id="btn-tts-answer" class="icon-btn" title="Listen to Correct Answer">
+                  <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" stroke-width="2" fill="none"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+               </button>
+               <span class="audio-hint">Correct Answer</span>
+            </div>
+            
+            <div id="controls-section" class="hidden">
+              <button id="btn-fail" class="control-btn fail">Again</button>
+              <button id="btn-good" class="control-btn good">Got It</button>
+            </div>
+            
+            <div id="next-section" class="hidden">
+                <button id="btn-next" class="btn-primary">Next Question</button>
+            </div>
+          </div>
+          
+          <div id="voice-answer-section" class="hidden">
+              <div class="pulsing-mic">
+                  <svg viewBox="0 0 24 24" width="48" height="48" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+              </div>
+              <p id="voice-transcript">Listening: 'wǒ de dá'àn shì A...'</p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Right Sidebar: Settings -->
+    <aside id="sidebar-right" class="sidebar sidebar-right">
+      <div class="sidebar-header">
+        <h2>Study Setup</h2>
+      </div>
+
+      <div class="settings-group foldable active">
+        <div class="foldable-header">
+          <h3>Filters & Order</h3>
+          <span class="fold-icon">▼</span>
+        </div>
+        <div class="foldable-content">
+          <div class="setting-item">
+            <span>Filter</span>
+            <select id="filter-type">
+              <option value="all">All Questions</option>
+              <option value="new">New Only</option>
+              <option value="due">Due for Review</option>
+              <option value="range">Specific Range</option>
+            </select>
+          </div>
+          <div id="range-picker" class="setting-item hidden">
+            <span>Range</span>
+            <div class="range-inputs">
+              <input type="number" id="range-start" value="1" min="1" max="100">
+              <span>to</span>
+              <input type="number" id="range-end" value="100" min="1" max="100">
+            </div>
+          </div>
+          <div class="setting-item">
+            <span>Sort Order</span>
+            <select id="study-order">
+              <option value="sequential">Sequential</option>
+              <option value="random">Randomized</option>
+              <option value="mastery">Worst First</option>
+              <option value="least">Least Exercised</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-group foldable">
+        <div class="foldable-header">
+          <h3>Question Style</h3>
+          <span class="fold-icon">▼</span>
+        </div>
+        <div class="foldable-content">
+          <label class="toggle-setting">
+            <span>Show Question Number</span>
+            <input type="checkbox" id="setting-show-id">
+          </label>
+          <label class="toggle-setting">
+            <span>Show Translations</span>
+            <input type="checkbox" id="setting-translations">
+          </label>
+          <label class="toggle-setting">
+            <span>Show Pinyin</span>
+            <input type="checkbox" id="setting-pinyin">
+          </label>
+          <label class="toggle-setting">
+            <span>Bold Keywords</span>
+            <input type="checkbox" id="setting-keywords">
+          </label>
+        </div>
+      </div>
+
+      <div class="settings-group foldable">
+        <div class="foldable-header">
+          <h3>Answer Options</h3>
+          <span class="fold-icon">▼</span>
+        </div>
+        <div class="foldable-content">
+          <label class="toggle-setting">
+            <span>Show Hints</span>
+            <input type="checkbox" id="setting-hints">
+          </label>
+          <label class="toggle-setting">
+            <span>Answer Pinyin</span>
+            <input type="checkbox" id="setting-answer-pinyin">
+          </label>
+          <label class="toggle-setting">
+            <span>Scramble Options</span>
+            <input type="checkbox" id="setting-scramble">
+          </label>
+          <label class="toggle-setting">
+            <span>Require Confirm</span>
+            <input type="checkbox" id="setting-confirm">
+          </label>
+        </div>
+      </div>
+      <p class="small-hint" style="margin-top: 1rem;">Changes apply to the next card.</p>
+    </aside>
+
+  </div>
+
+  <script src="questions_data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
