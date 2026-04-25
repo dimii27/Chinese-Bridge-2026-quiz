@@ -217,7 +217,10 @@ async function fetchProgressFromServer(manual = false) {
     }
   } catch (err) {
     console.warn("Cloud sync failed", err);
-    updateCloudStatus('error', 'Sync Failed');
+    let msg = "Sync Failed";
+    if (err.message.includes("permission-denied")) msg = "Check Firestore Rules";
+    else if (err.message.includes("offline")) msg = "Offline";
+    updateCloudStatus('error', msg);
   }
 }
 
@@ -251,7 +254,9 @@ async function syncProgressToServer() {
     updateCloudStatus('connected', 'Cloud Synced');
   } catch (err) {
     console.error("Cloud upload failed", err);
-    updateCloudStatus('error', 'Upload Failed');
+    let msg = "Upload Failed";
+    if (err.message.includes("permission-denied")) msg = "Check Firestore Rules";
+    updateCloudStatus('error', msg);
   }
 }
 
