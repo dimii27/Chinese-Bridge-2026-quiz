@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bridge-srs-v23';
+const CACHE_NAME = 'bridge-srs-v24';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -30,7 +30,9 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   // EXPLICITLY IGNORE FIREBASE AND OTHER CROSS-ORIGIN API CALLS
-  if (event.request.url.includes('googleapis.com') || event.request.url.includes('firebase')) {
+  if (event.request.url.includes('googleapis.com') || 
+      event.request.url.includes('firebase') || 
+      event.request.url.includes('gstatic.com')) {
     return;
   }
 

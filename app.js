@@ -216,12 +216,18 @@ async function fetchProgressFromServer(manual = false) {
       if (manual) alert("Local progress uploaded to new cloud account.");
     }
   } catch (err) {
-    console.error("Cloud sync error detail:", err);
+    console.error("FULL SYNC ERROR:", err);
     let msg = "Sync Failed";
     const errStr = String(err).toLowerCase();
+    
+    // Diagnostic alert for the user to report back
+    if (manual) {
+      alert(`DEBUG INFO:\nCode: ${err.code || 'N/A'}\nMessage: ${err.message}\nName: ${err.name}`);
+    }
+
     if (errStr.includes("permission-denied") || errStr.includes("insufficient permissions")) msg = "Check Firestore Rules";
-    else if (errStr.includes("offline") || errStr.includes("network")) msg = "Offline / Network Error";
-    else msg = "Sync Error: " + (err.code || "Check Console");
+    else if (errStr.includes("unavailable") || errStr.includes("offline") || errStr.includes("network")) msg = "Network Blocked";
+    else msg = "Error: " + (err.code || "Check Console");
     updateCloudStatus('error', msg);
   }
 }
