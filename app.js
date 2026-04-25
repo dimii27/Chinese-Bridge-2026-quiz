@@ -216,10 +216,12 @@ async function fetchProgressFromServer(manual = false) {
       if (manual) alert("Local progress uploaded to new cloud account.");
     }
   } catch (err) {
-    console.warn("Cloud sync failed", err);
+    console.error("Cloud sync error detail:", err);
     let msg = "Sync Failed";
-    if (err.message.includes("permission-denied")) msg = "Check Firestore Rules";
-    else if (err.message.includes("offline")) msg = "Offline";
+    const errStr = String(err).toLowerCase();
+    if (errStr.includes("permission-denied") || errStr.includes("insufficient permissions")) msg = "Check Firestore Rules";
+    else if (errStr.includes("offline") || errStr.includes("network")) msg = "Offline / Network Error";
+    else msg = "Sync Error: " + (err.code || "Check Console");
     updateCloudStatus('error', msg);
   }
 }
@@ -253,9 +255,11 @@ async function syncProgressToServer() {
     await db.collection('progress').doc(username).set(progress);
     updateCloudStatus('connected', 'Cloud Synced');
   } catch (err) {
-    console.error("Cloud upload failed", err);
+    console.error("Cloud upload error detail:", err);
     let msg = "Upload Failed";
-    if (err.message.includes("permission-denied")) msg = "Check Firestore Rules";
+    const errStr = String(err).toLowerCase();
+    if (errStr.includes("permission-denied") || errStr.includes("insufficient permissions")) msg = "Check Firestore Rules";
+    else msg = "Upload Error: " + (err.code || "Check Console");
     updateCloudStatus('error', msg);
   }
 }

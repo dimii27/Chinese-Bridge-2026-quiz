@@ -652,7 +652,7 @@ mark.keyword {
 }
 
 .sidebar-close {
-  display: none;
+  display: none !important;
   background: none;
   border: none;
   color: var(--text-secondary);
@@ -987,7 +987,7 @@ select {
     max-width: 320px;
     padding: 1.5rem;
   }
-  .sidebar-close { display: block; }
+  .sidebar-close { display: block !important; }
   .sidebar-right {
     right: 0;
     transform: translateX(100%);

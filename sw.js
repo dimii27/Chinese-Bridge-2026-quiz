@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bridge-srs-v22';
+const CACHE_NAME = 'bridge-srs-v23';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -9,7 +9,7 @@ const urlsToCache = [
 ];
 
 self.addEventListener('install', event => {
-  self.skipWaiting(); // Force activate immediately
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
@@ -19,7 +19,6 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('activate', event => {
-  // Delete old caches
   event.waitUntil(
     caches.keys().then(names =>
       Promise.all(
@@ -30,11 +29,15 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
+  // EXPLICITLY IGNORE FIREBASE AND OTHER CROSS-ORIGIN API CALLS
+  if (event.request.url.includes('googleapis.com') || event.request.url.includes('firebase')) {
+    return;
+  }
+
   // Network-first for other assets
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        // Only cache valid GET responses from the same origin
         const isSameOrigin = event.request.url.startsWith(self.location.origin);
         if (response.ok && event.request.method === 'GET' && isSameOrigin) {
           const cloned = response.clone();
