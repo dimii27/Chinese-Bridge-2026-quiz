@@ -636,6 +636,32 @@ mark.keyword {
   padding: 1rem;
   overflow-y: auto;
   box-shadow: 10px 0 30px rgba(0,0,0,0.3);
+  position: relative;
+}
+
+.sidebar-close {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: white;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 10;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.sidebar-close:hover {
+  background: var(--danger);
+  border-color: var(--danger);
 }
 
 .sidebar-right {
@@ -947,14 +973,16 @@ select {
     position: fixed;
     top: 0;
     bottom: 0;
-    z-index: 1000;
+    z-index: 2000;
     transform: translateX(-100%);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     background: rgba(30, 41, 59, 0.98);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     width: 280px;
+    padding-top: 4rem; /* Space for close button */
   }
+  .sidebar-close { display: flex; }
   .sidebar-right {
     right: 0;
     transform: translateX(100%);
@@ -967,6 +995,11 @@ select {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
+    position: sticky;
+    top: 0;
+    background: var(--bg-color);
+    padding: 0.5rem 0;
+    z-index: 100;
   }
 }
 

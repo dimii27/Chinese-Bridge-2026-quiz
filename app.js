@@ -131,6 +131,13 @@ const el = {
   cloudStatus: document.getElementById('cloud-status'),
   statusText: document.querySelector('#cloud-status .status-text'),
   btnSyncNow: document.getElementById('btn-sync-now'),
+
+  sidebarLeft: document.getElementById('sidebar-left'),
+  sidebarRight: document.getElementById('sidebar-right'),
+  btnToggleLeft: document.getElementById('btn-toggle-left'),
+  btnToggleRight: document.getElementById('btn-toggle-right'),
+  btnCloseLeft: document.getElementById('btn-close-left'),
+  btnCloseRight: document.getElementById('btn-close-right'),
 };
 
 // --- Core Button Listeners ---
@@ -444,6 +451,20 @@ function setupButtonListeners() {
 }
 
 function setupSidebarListeners() {
+  // Mobile Toggles
+  el.btnToggleLeft.onclick = () => {
+    el.sidebarLeft.classList.toggle('open');
+    el.sidebarRight.classList.remove('open');
+  };
+  el.btnToggleRight.onclick = () => {
+    el.sidebarRight.classList.toggle('open');
+    el.sidebarLeft.classList.remove('open');
+  };
+
+  // Mobile Close Buttons
+  el.btnCloseLeft.onclick = () => el.sidebarLeft.classList.remove('open');
+  el.btnCloseRight.onclick = () => el.sidebarRight.classList.remove('open');
+
   // Foldable sections
   document.querySelectorAll('.foldable-header').forEach(header => {
     header.onclick = () => {
