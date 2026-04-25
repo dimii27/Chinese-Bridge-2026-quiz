@@ -127,6 +127,10 @@ const el = {
   togConfirm: document.getElementById('setting-confirm'),
   togScramble: document.getElementById('setting-scramble'),
   togShowId: document.getElementById('setting-show-id'),
+
+  cloudStatus: document.getElementById('cloud-status'),
+  statusText: document.querySelector('#cloud-status .status-text'),
+  btnSyncNow: document.getElementById('btn-sync-now'),
 };
 
 // --- Core Button Listeners ---
@@ -151,6 +155,13 @@ async function init() {
     el.loginModal.classList.add('hidden');
     el.app.classList.remove('hidden');
     el.displayUsername.textContent = username;
+    
+    // Add Sync button listener
+    el.btnSyncNow.onclick = async () => {
+      updateCloudStatus('syncing', 'Syncing...');
+      await fetchProgressFromServer(true); 
+    };
+
     await fetchProgressFromServer();
     setupButtonListeners();
     setupSidebarListeners();
@@ -163,21 +174,43 @@ async function init() {
   }
 }
 
-async function fetchProgressFromServer() {
+function updateCloudStatus(state, text) {
+  if (!el.cloudStatus) return;
+  el.cloudStatus.className = 'cloud-status ' + state;
+  el.statusText.textContent = text;
+}
+
+async function fetchProgressFromServer(manual = false) {
   if (!username) return;
   const local = localStorage.getItem('srs_progress_' + username);
   if (local) progress = JSON.parse(local);
 
   try {
+    updateCloudStatus('syncing', 'Connecting...');
     const doc = await db.collection('progress').doc(username).get();
     if (doc.exists) {
       const data = doc.data();
-      progress = mergeProgress(progress, data);
-      localStorage.setItem('srs_progress_' + username, JSON.stringify(progress));
-      renderSidebar();
+      const merged = mergeProgress(progress, data);
+      
+      // If data changed after merge, save it
+      if (JSON.stringify(merged) !== JSON.stringify(progress)) {
+          progress = merged;
+          localStorage.setItem('srs_progress_' + username, JSON.stringify(progress));
+          renderSidebar();
+          if (manual) alert("Cloud data merged successfully!");
+      } else {
+          if (manual) alert("Already up to date.");
+      }
+      updateCloudStatus('connected', 'Cloud Synced');
+    } else {
+      // User doesn't exist in cloud yet, let's upload current progress
+      await db.collection('progress').doc(username).set(progress);
+      updateCloudStatus('connected', 'Cloud Active');
+      if (manual) alert("Local progress uploaded to new cloud account.");
     }
   } catch (err) {
     console.warn("Cloud sync failed", err);
+    updateCloudStatus('error', 'Sync Failed');
   }
 }
 
@@ -206,9 +239,12 @@ async function syncProgressToServer() {
   if (!username) return;
 
   try {
+    updateCloudStatus('syncing', 'Uploading...');
     await db.collection('progress').doc(username).set(progress);
+    updateCloudStatus('connected', 'Cloud Synced');
   } catch (err) {
     console.error("Cloud upload failed", err);
+    updateCloudStatus('error', 'Upload Failed');
   }
 }
 
