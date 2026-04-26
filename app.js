@@ -1201,7 +1201,9 @@ function submitAnswer(method) {
   stopSTT();
   
   el.confirmSection.classList.add('hidden');
-  if(method === 'click') el.voiceAnswerSection.classList.add('hidden');
+  // Don't hide voice section in test mode if we need it for step 2
+  if(method === 'click' && currentMode !== 'test') el.voiceAnswerSection.classList.add('hidden');
+  if(currentMode === 'test') el.voiceAnswerSection.classList.remove('hidden');
   
   const correctKey = currentCard.answer;
   const isCorrect = currentSelectedKey === correctKey;
@@ -1579,6 +1581,7 @@ function speak(text, onEndCallback = null, forcePlay = false) {
   
   // If not forced and already speaking, toggle it off
   if (!forcePlay && synth.speaking) {
+      console.log("TTS: Manually stopping current speech.");
       synth.cancel();
       // Reset transcript message if we stop manually
       if (el.voiceTranscript.textContent === "Reading question...") {

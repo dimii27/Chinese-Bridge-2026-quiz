@@ -631,14 +631,25 @@ mark.keyword {
   width: 250px;
   background: var(--surface-color);
   border-right: 1px solid rgba(255,255,255,0.05);
-  padding: 1.5rem 1rem;
-  padding-bottom: 120px; /* Large padding for mobile nav bars */
-  overflow-y: scroll !important;
-  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  padding-bottom: 120px;
+  overflow-y: auto !important;
   max-height: 100vh;
   min-height: 0;
   box-shadow: 10px 0 30px rgba(0,0,0,0.3);
-  scrollbar-width: thin;
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 5px;
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: 10px;
+}
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
 }
 
 .sidebar-header {
