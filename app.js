@@ -1121,7 +1121,9 @@ function updateDisplay() {
     const valObj = currentCard.options[key];
     if (!valObj) return;
     
-    let mainHtml = `<span class="option-main">${displayLetter}. ${valObj.hanzi}</span>`;
+    // Show pinyin on options after answering if "After Answering → Show Pinyin" is on
+    const optionText = (postAnswer && finalShowPinyin && valObj.pinyin) ? valObj.pinyin : valObj.hanzi;
+    let mainHtml = `<span class="option-main">${displayLetter}. ${optionText}</span>`;
     if (finalShowHints && valObj.hint) {
       mainHtml += `<span class="option-hint">${valObj.hint}</span>`;
     }
@@ -1260,30 +1262,33 @@ function submitAnswer(method) {
   addXP(xpGain);
   
   if (isCorrect) {
-    SFX.play('correct');
+    try { SFX.play('correct'); } catch(e) {}
     el.card.classList.add('correct-glow');
     setTimeout(() => el.card.classList.remove('correct-glow'), 600);
     
-    // Auto-speak correct answer if enabled
+    // Auto-speak correct answer if enabled (delay to let SFX finish)
     if (settings.autoSpeakA) {
-      setTimeout(() => speak(currentCard.options[correctKey].hanzi), 500);
+      setTimeout(() => {
+        speak(currentCard.options[correctKey].hanzi, null, true);
+      }, 800);
     }
   } else {
-    SFX.play('wrong');
+    try { SFX.play('wrong'); } catch(e) {}
     el.card.classList.add('wrong-shake');
     setTimeout(() => el.card.classList.remove('wrong-shake'), 400);
   }
 
-  // Auto-advance logic
+  // Auto-advance logic (runs independently of SFX)
   if (isCorrect && settings.autoAdvance && currentMode !== 'test') {
+    const advanceDelay = settings.autoSpeakA ? 2500 : 1500;
     setTimeout(() => {
-      // If we are in an SRS mode (study/review), we must record the 'Good' result
+      if (!currentAnswerSelected) return; // Guard: card already changed
       if (currentMode === 'study' || currentMode === 'review') {
         processPracticeAnswer(1);
       } else {
         nextCard();
       }
-    }, 1500); // Slightly longer delay for UX
+    }, advanceDelay);
   }
 }
 

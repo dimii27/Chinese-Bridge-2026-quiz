@@ -635,6 +635,7 @@ mark.keyword {
   flex-direction: column;
   padding: 1rem;
   overflow-y: auto;
+  min-height: 0; /* Required for overflow scroll in flex container */
   box-shadow: 10px 0 30px rgba(0,0,0,0.3);
 }
 
