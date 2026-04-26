@@ -162,6 +162,7 @@ const el = {
   confirmSection: document.getElementById('confirm-section'),
   voiceAnswerSection: document.getElementById('voice-answer-section'),
   voiceTranscript: document.getElementById('voice-transcript'),
+  btnSkipReading: document.getElementById('btn-skip-reading'),
   nextSection: document.getElementById('next-section'),
   
   btnTtsQuestion: document.getElementById('btn-tts-question'),
@@ -581,6 +582,11 @@ function setupButtonListeners() {
   el.btnTtsAnswer.onclick = () => {
     const correctKey = currentCard.answer;
     speak(currentCard.options[correctKey].hanzi);
+  };
+  el.btnSkipReading.onclick = () => {
+    if (currentMode === 'test' && testStep === 2) {
+      submitAnswer('voice'); // Complete as if they read it
+    }
   };
 }
 
@@ -1054,6 +1060,7 @@ function renderCard() {
         if(!currentAnswerSelected) {
             el.voiceTranscript.textContent = "Listening: 'wǒ de dá'àn shì A...'";
             el.voiceTranscript.style.color = "var(--text-secondary)";
+            el.btnSkipReading.classList.add('hidden');
             startSTT();
         }
     }, true);
@@ -1225,12 +1232,16 @@ function submitAnswer(method) {
                   b.style.pointerEvents = 'none';
               }
           });
-          setTimeout(startSTT, 500); 
+          setTimeout(() => {
+              el.btnSkipReading.classList.remove('hidden');
+              startSTT();
+          }, 500); 
           return; 
       } else {
           score += 3;
           el.currentScore.textContent = score;
           el.voiceTranscript.textContent = "Perfect! Total 5 points.";
+          el.btnSkipReading.classList.add('hidden');
       }
     }
   }
@@ -1577,9 +1588,23 @@ function speak(text, onEndCallback = null, forcePlay = false) {
   }
   
   synth.cancel();
-  // Strip underscores so TTS doesn't read "underscore underscore..."
-  const cleanText = text.replace(/_+/g, ' ');
+  
+  // Robust HTML stripping so TTS doesn't read tags like <ruby> or <rt>
+  const stripHTML = (str) => {
+    const tmp = document.createElement("DIV");
+    tmp.innerHTML = str;
+    return tmp.textContent || tmp.innerText || "";
+  };
+  
+  const cleanText = stripHTML(text).replace(/_+/g, ' ');
   const ut = new SpeechSynthesisUtterance(cleanText);
+  
+  // Better voice selection
+  const voices = synth.getVoices();
+  const zhVoice = voices.find(v => v.lang.includes('zh') && v.lang.includes('CN')) || 
+                  voices.find(v => v.lang.includes('zh'));
+  if (zhVoice) ut.voice = zhVoice;
+  
   ut.lang = 'zh-CN';
   ut.rate = 0.9;
   if(onEndCallback) {
