@@ -1274,13 +1274,16 @@ function submitAnswer(method) {
     setTimeout(() => el.card.classList.remove('wrong-shake'), 400);
   }
 
-  speak(currentCard.options[correctKey].hanzi, null, true);
-
   // Auto-advance logic
   if (isCorrect && settings.autoAdvance && currentMode !== 'test') {
     setTimeout(() => {
-      if (currentAnswerSelected) nextCard();
-    }, 1200);
+      // If we are in an SRS mode (study/review), we must record the 'Good' result
+      if (currentMode === 'study' || currentMode === 'review') {
+        processPracticeAnswer(1);
+      } else {
+        nextCard();
+      }
+    }, 1500); // Slightly longer delay for UX
   }
 }
 
