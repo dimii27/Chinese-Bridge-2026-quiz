@@ -1298,15 +1298,9 @@ function submitAnswer(method) {
     el.card.classList.add('correct-glow');
     setTimeout(() => el.card.classList.remove('correct-glow'), 600);
     
-    // Auto-speak correct answer if enabled (delay to let SFX finish)
+    // Auto-speak correct answer if enabled (IMMEDIATE for Safari compatibility)
     if (settings.autoSpeakA) {
-      const isTestStep1 = currentMode === 'test' && testStep === 1;
-      // If test step 1, we already triggered it above. 
-      if (!isTestStep1) {
-          setTimeout(() => {
-            speak(currentCard.options[correctKey].hanzi, null, true);
-          }, 800);
-      }
+      speak(currentCard.options[correctKey].hanzi, null, true);
     }
   } else {
     try { SFX.play('wrong'); } catch(e) {}
@@ -1314,18 +1308,20 @@ function submitAnswer(method) {
     setTimeout(() => el.card.classList.remove('wrong-shake'), 400);
   }
 
-  // Auto-advance logic (runs independently of SFX)
+  // Auto-advance logic
   const shouldAutoAdvance = (settings.autoAdvance !== false) && (currentMode !== 'test' || testStep === 2);
   
   if (isCorrect && shouldAutoAdvance) {
-    const advanceDelay = settings.autoSpeakA ? 2800 : 1800; // Slightly longer to be safe
+    const advanceDelay = 2000; 
     console.log(`Auto-advance scheduled in ${advanceDelay}ms`);
     setTimeout(() => {
-      if (!currentAnswerSelected) return; // Guard: card already changed
-      if (currentMode === 'study' || currentMode === 'review') {
-        processPracticeAnswer(1);
-      } else {
-        nextCard();
+      // Re-verify we haven't manually moved on
+      if (currentAnswerSelected) {
+          if (currentMode === 'study' || currentMode === 'review') {
+            processPracticeAnswer(1);
+          } else {
+            nextCard();
+          }
       }
     }, advanceDelay);
   }
