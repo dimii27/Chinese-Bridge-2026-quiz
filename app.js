@@ -47,12 +47,14 @@ let settings = {
   // After Answering
   pinyinAfter: true,
   transAfter: true,
+  optionsPinyinAfter: true,
   hintsAfter: true,
   autoSpeakA: false,
   // Behavior
   showId: false,
   autoAdvance: true,
-  sfx: false
+  sfx: false,
+  optionsPinyinBefore: false
 };
 
 // --- SFX Module (Web Audio API) ---
@@ -223,6 +225,8 @@ const el = {
   togHintsAfter: document.getElementById('setting-hints-after'),
   togTransAfter: document.getElementById('setting-trans-after'),
   togAutoSpeakA: document.getElementById('setting-auto-speak-a'),
+  togOptionsPinyinBefore: document.getElementById('setting-options-pinyin-before'),
+  togOptionsPinyinAfter: document.getElementById('setting-options-pinyin-after'),
 };
 
 // --- Core Button Listeners ---
@@ -1121,8 +1125,10 @@ function updateDisplay() {
     const valObj = currentCard.options[key];
     if (!valObj) return;
     
-    // Show pinyin on options after answering if "After Answering → Show Pinyin" is on
-    const optionText = (postAnswer && finalShowPinyin && valObj.pinyin) ? valObj.pinyin : valObj.hanzi;
+    // Show pinyin on options based on new dedicated toggles
+    const showOptionPinyin = postAnswer ? settings.optionsPinyinAfter : settings.optionsPinyinBefore;
+    const optionText = (showOptionPinyin && valObj.pinyin) ? valObj.pinyin : valObj.hanzi;
+    
     let mainHtml = `<span class="option-main">${displayLetter}. ${optionText}</span>`;
     if (finalShowHints && valObj.hint) {
       mainHtml += `<span class="option-hint">${valObj.hint}</span>`;
@@ -1378,8 +1384,10 @@ function processPracticeAnswer(quality) {
   progress[currentCard.id] = p;
   syncProgressToServer();
   
-  if(currentMode === 'review') {
-      goHome();
+  if (currentMode === 'review') {
+      // Only go home if queue is truly empty
+      if (studyQueue.length <= 1) goHome();
+      else nextCard();
   } else {
       nextCard();
   }
@@ -1564,7 +1572,15 @@ function speak(text, onEndCallback = null, forcePlay = false) {
      ut.onend = onEndCallback;
      setTimeout(onEndCallback, 15000); 
   }
-  synth.speak(ut);
+  
+  // Robustness: brief delay to ensure cancel finished
+  setTimeout(() => {
+    try {
+      synth.speak(ut);
+    } catch(e) {
+      console.error("TTS Speak failed", e);
+    }
+  }, 50);
 }
 
 el.btnTtsQuestion.onclick = () => {
@@ -1598,6 +1614,8 @@ function loadSettings() {
   if (el.togTransAfter) el.togTransAfter.checked = settings.transAfter;
   if (el.togHintsAfter) el.togHintsAfter.checked = settings.hintsAfter;
   if (el.togAutoSpeakA) el.togAutoSpeakA.checked = settings.autoSpeakA;
+  if (el.togOptionsPinyinBefore) el.togOptionsPinyinBefore.checked = settings.optionsPinyinBefore;
+  if (el.togOptionsPinyinAfter) el.togOptionsPinyinAfter.checked = settings.optionsPinyinAfter;
 
   // Behavior
   if (el.togShowId) el.togShowId.checked = settings.showId;
@@ -1668,6 +1686,8 @@ setupDisplaySettingListener(el.togPinyinAfter, 'pinyinAfter');
 setupDisplaySettingListener(el.togTransAfter, 'transAfter');
 setupDisplaySettingListener(el.togHintsAfter, 'hintsAfter');
 setupDisplaySettingListener(el.togAutoSpeakA, 'autoSpeakA');
+setupDisplaySettingListener(el.togOptionsPinyinBefore, 'optionsPinyinBefore');
+setupDisplaySettingListener(el.togOptionsPinyinAfter, 'optionsPinyinAfter');
 
 // Behavior
 setupDisplaySettingListener(el.togShowId, 'showId');
