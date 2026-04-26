@@ -33,28 +33,26 @@ let currentStudyIndex = 0;
 
 // Settings
 let settings = {
-  translations: false,
-  pinyin: false,
-  answerPinyin: false,
-  hints: true, 
-  keywords: false,
-  confirm: false,
-  scramble: true,
   filterType: 'all',
   studyOrder: 'sequential',
   rangeStart: 1,
   rangeEnd: 100,
+  scramble: true,
+  // While Answering
+  pinyinBefore: false,
+  transBefore: false,
+  keywords: false,
+  hintsBefore: true,
+  autoSpeakQ: false,
+  // After Answering
+  pinyinAfter: true,
+  transAfter: true,
+  hintsAfter: true,
+  autoSpeakA: false,
+  // Behavior
   showId: false,
   autoAdvance: true,
-  sfx: false,
-  pinyinBefore: false,
-  hintsBefore: true,
-  transBefore: false,
-  pinyinAfter: true,
-  hintsAfter: true,
-  transAfter: true,
-  autoSpeakQ: false,
-  autoSpeakA: false
+  sfx: false
 };
 
 // --- SFX Module (Web Audio API) ---
@@ -180,14 +178,9 @@ const el = {
   adminUserList: document.getElementById('admin-user-list'),
   btnAdminRefresh: document.getElementById('btn-admin-refresh'),
   
-  togTrans: document.getElementById('setting-translations'),
-  togPinyin: document.getElementById('setting-pinyin'),
-  togAnswerPinyin: document.getElementById('setting-answer-pinyin'),
-  togHints: document.getElementById('setting-hints'),
-  togKey: document.getElementById('setting-keywords'),
-  togConfirm: document.getElementById('setting-confirm'),
   togScramble: document.getElementById('setting-scramble'),
   togShowId: document.getElementById('setting-show-id'),
+  togKeywords: document.getElementById('setting-keywords'),
 
   cloudStatus: document.getElementById('cloud-status'),
   statusText: document.querySelector('#cloud-status .status-text'),
@@ -1034,6 +1027,11 @@ function renderCard() {
   buildOptionsDom();
   updateDisplay();
   
+  // Auto-speak question (all modes, not just test)
+  if (settings.autoSpeakQ && currentMode !== 'test') {
+    speak(currentCard.chinese, null, false);
+  }
+
   const isTest = currentMode === 'test';
   if (isTest) {
     el.voiceAnswerSection.classList.remove('hidden');
@@ -1056,14 +1054,24 @@ function updateDisplay() {
   const isTest = currentMode === 'test';
   const postAnswer = currentAnswerSelected;
   
-  // Use Before/After settings
+  // Before/After settings
   const showPinyin = postAnswer ? settings.pinyinAfter : settings.pinyinBefore;
   const showTrans = postAnswer ? settings.transAfter : settings.transBefore;
   const showHints = postAnswer ? settings.hintsAfter : settings.hintsBefore;
+  const showKeywords = settings.keywords;
   
-  // Special rule for non-test modes: if postAnswer, always show everything important
-  const finalShowPinyin = isTest ? showPinyin : (postAnswer ? true : showPinyin);
-  const finalShowTrans = isTest ? showTrans : (postAnswer ? true : showTrans);
+  // In test mode before answering, hide everything
+  const finalShowPinyin = isTest && !postAnswer ? false : showPinyin;
+  const finalShowTrans = isTest && !postAnswer ? false : showTrans;
+  const finalShowHints = isTest && !postAnswer ? false : showHints;
+
+  // Question number
+  if (settings.showId) {
+    el.questionIdLabel.textContent = `Question #${currentCard.id}`;
+    el.questionIdLabel.classList.remove('hidden');
+  } else {
+    el.questionIdLabel.classList.add('hidden');
+  }
 
   function processBlanks(html, isPinyin = false) {
     if (html.includes('____') || html.includes('___')) {
@@ -1097,7 +1105,7 @@ function updateDisplay() {
     el.questionText.innerHTML = processBlanks(currentCard.chinese_pinyin, true);
     el.questionText.classList.add('show-pinyin');
   } else {
-    const baseHtml = showHints ? currentCard.chinese_keywords : currentCard.chinese;
+    const baseHtml = showKeywords ? (currentCard.chinese_keywords || currentCard.chinese) : currentCard.chinese;
     el.questionText.innerHTML = processBlanks(baseHtml, false);
     el.questionText.classList.remove('show-pinyin');
   }
@@ -1105,7 +1113,7 @@ function updateDisplay() {
   el.questionTranslation.textContent = currentCard.english;
   el.translationSection.classList.toggle('hidden', !finalShowTrans);
   
-  // Update Options
+  // Update option buttons
   const btns = el.optionsContainer.querySelectorAll('.option-btn');
   btns.forEach(btn => {
     const key = btn.dataset.originalKey;
@@ -1113,10 +1121,8 @@ function updateDisplay() {
     const valObj = currentCard.options[key];
     if (!valObj) return;
     
-    // In test mode, hide option Pinyin until answer
-    const showOptionPinyin = postAnswer; 
-    let mainHtml = `<span class="option-main">${displayLetter}. ${showOptionPinyin ? valObj.pinyin : valObj.hanzi}</span>`;
-    if (showHints && valObj.hint) {
+    let mainHtml = `<span class="option-main">${displayLetter}. ${valObj.hanzi}</span>`;
+    if (finalShowHints && valObj.hint) {
       mainHtml += `<span class="option-hint">${valObj.hint}</span>`;
     }
     btn.innerHTML = mainHtml;
@@ -1569,16 +1575,24 @@ function loadSettings() {
   const data = localStorage.getItem('srs_settings_' + username);
   if (data) settings = {...settings, ...JSON.parse(data)};
   
+  // Filters & Order
+  if (el.togScramble) el.togScramble.checked = settings.scramble;
+  
+  // While Answering
   if (el.togPinyinBefore) el.togPinyinBefore.checked = settings.pinyinBefore;
-  if (el.togHintsBefore) el.togHintsBefore.checked = settings.hintsBefore;
   if (el.togTransBefore) el.togTransBefore.checked = settings.transBefore;
+  if (el.togKeywords) el.togKeywords.checked = settings.keywords;
+  if (el.togHintsBefore) el.togHintsBefore.checked = settings.hintsBefore;
   if (el.togAutoSpeakQ) el.togAutoSpeakQ.checked = settings.autoSpeakQ;
   
+  // After Answering
   if (el.togPinyinAfter) el.togPinyinAfter.checked = settings.pinyinAfter;
-  if (el.togHintsAfter) el.togHintsAfter.checked = settings.hintsAfter;
   if (el.togTransAfter) el.togTransAfter.checked = settings.transAfter;
+  if (el.togHintsAfter) el.togHintsAfter.checked = settings.hintsAfter;
   if (el.togAutoSpeakA) el.togAutoSpeakA.checked = settings.autoSpeakA;
 
+  // Behavior
+  if (el.togShowId) el.togShowId.checked = settings.showId;
   if (el.togAutoAdvance) el.togAutoAdvance.checked = settings.autoAdvance;
   if (el.togSfx) el.togSfx.checked = settings.sfx;
 }
@@ -1607,7 +1621,7 @@ function updateStreak() {
   saveProgress();
 }
 
-// Lightweight listener: only updates display, never rescrambles or restarts TTS
+// Lightweight listener: only updates display
 function setupDisplaySettingListener(element, key) {
   if (!element) return;
   element.addEventListener('change', () => {
@@ -1617,36 +1631,40 @@ function setupDisplaySettingListener(element, key) {
   });
 }
 
-// Structural listener: these need a full re-render (e.g. scramble changes order)
+// Structural listener: needs full re-render (scramble)
 function setupStructuralSettingListener(element, key) {
   if (!element) return;
   element.addEventListener('change', () => {
     settings[key] = element.checked;
     saveSettings();
-    // Scramble changes the DOM order, so we need a full re-render
     if (currentMode !== 'home' && !currentAnswerSelected) {
-      currentShuffledKeys = null; // Force reshuffle
+      currentShuffledKeys = null;
       renderCard();
     }
   });
 }
 
-// Display-only settings (don't reshuffle or restart TTS)
-// Removed old legacy listeners
+// --- Wire up all settings listeners ---
+// Filters & Order
+setupStructuralSettingListener(el.togScramble, 'scramble');
 
-// Extra Gamification listeners
-setupDisplaySettingListener(el.togSfx, 'sfx');
-setupDisplaySettingListener(el.togAutoAdvance, 'autoAdvance');
-
+// While Answering
 setupDisplaySettingListener(el.togPinyinBefore, 'pinyinBefore');
-setupDisplaySettingListener(el.togHintsBefore, 'hintsBefore');
 setupDisplaySettingListener(el.togTransBefore, 'transBefore');
+setupDisplaySettingListener(el.togKeywords, 'keywords');
+setupDisplaySettingListener(el.togHintsBefore, 'hintsBefore');
 setupDisplaySettingListener(el.togAutoSpeakQ, 'autoSpeakQ');
 
+// After Answering
 setupDisplaySettingListener(el.togPinyinAfter, 'pinyinAfter');
-setupDisplaySettingListener(el.togHintsAfter, 'hintsAfter');
 setupDisplaySettingListener(el.togTransAfter, 'transAfter');
+setupDisplaySettingListener(el.togHintsAfter, 'hintsAfter');
 setupDisplaySettingListener(el.togAutoSpeakA, 'autoSpeakA');
+
+// Behavior
+setupDisplaySettingListener(el.togShowId, 'showId');
+setupDisplaySettingListener(el.togSfx, 'sfx');
+setupDisplaySettingListener(el.togAutoAdvance, 'autoAdvance');
 
 if (el.btnStartStudyHero) {
   el.btnStartStudyHero.onclick = () => {

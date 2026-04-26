@@ -284,7 +284,7 @@
 
       <div class="settings-group foldable active">
         <div class="foldable-header">
-          <h3>Filters & Order</h3>
+          <h3>Filters &amp; Order</h3>
           <span class="fold-icon">▼</span>
         </div>
         <div class="foldable-content">
@@ -314,12 +314,43 @@
               <option value="least">Least Exercised</option>
             </select>
           </div>
+          <label class="toggle-setting">
+            <span>Scramble Options</span>
+            <input type="checkbox" id="setting-scramble">
+          </label>
         </div>
       </div>
 
       <div class="settings-group foldable">
         <div class="foldable-header">
-          <h3>Question Style</h3>
+          <h3>While Answering</h3>
+          <span class="fold-icon">▼</span>
+        </div>
+        <div class="foldable-content">
+          <label class="toggle-setting"><span>Show Pinyin</span><input type="checkbox" id="setting-pinyin-before"></label>
+          <label class="toggle-setting"><span>Show Translation</span><input type="checkbox" id="setting-trans-before"></label>
+          <label class="toggle-setting"><span>Bold Keywords</span><input type="checkbox" id="setting-keywords"></label>
+          <label class="toggle-setting"><span>Show Option Hints</span><input type="checkbox" id="setting-hints-before"></label>
+          <label class="toggle-setting"><span>Auto-Read Question</span><input type="checkbox" id="setting-auto-speak-q"></label>
+        </div>
+      </div>
+
+      <div class="settings-group foldable">
+        <div class="foldable-header">
+          <h3>After Answering</h3>
+          <span class="fold-icon">▼</span>
+        </div>
+        <div class="foldable-content">
+          <label class="toggle-setting"><span>Show Pinyin</span><input type="checkbox" id="setting-pinyin-after"></label>
+          <label class="toggle-setting"><span>Show Translation</span><input type="checkbox" id="setting-trans-after"></label>
+          <label class="toggle-setting"><span>Show Option Hints</span><input type="checkbox" id="setting-hints-after"></label>
+          <label class="toggle-setting"><span>Auto-Read Answer</span><input type="checkbox" id="setting-auto-speak-a"></label>
+        </div>
+      </div>
+
+      <div class="settings-group foldable">
+        <div class="foldable-header">
+          <h3>Behavior</h3>
           <span class="fold-icon">▼</span>
         </div>
         <div class="foldable-content">
@@ -328,53 +359,13 @@
             <input type="checkbox" id="setting-show-id">
           </label>
           <label class="toggle-setting">
-            <span>Show Translations</span>
-            <input type="checkbox" id="setting-translations">
+            <span>Auto-Advance on Correct</span>
+            <input type="checkbox" id="setting-auto-advance">
           </label>
           <label class="toggle-setting">
-            <span>Show Pinyin</span>
-            <input type="checkbox" id="setting-pinyin">
+            <span>Sound Effects</span>
+            <input type="checkbox" id="setting-sfx">
           </label>
-          <label class="toggle-setting">
-            <span>Bold Keywords</span>
-            <input type="checkbox" id="setting-keywords">
-          </label>
-        </div>
-      </div>
-
-      <div class="settings-group foldable">
-        <div class="foldable-header">
-          <h3>Answer Options</h3>
-          <span class="fold-icon">▼</span>
-        </div>
-        <div class="foldable-content">
-          <div class="settings-group">
-            <h3>Question Display</h3>
-            <label class="toggle-setting"><span>Pinyin</span><input type="checkbox" id="setting-pinyin-before"></label>
-            <label class="toggle-setting"><span>Hints</span><input type="checkbox" id="setting-hints-before"></label>
-            <label class="toggle-setting"><span>Translations</span><input type="checkbox" id="setting-trans-before"></label>
-            <label class="toggle-setting"><span>Auto-Speak Question</span><input type="checkbox" id="setting-auto-speak-q"></label>
-          </div>
-          
-          <div class="settings-group">
-            <h3>Answer Feedback</h3>
-            <label class="toggle-setting"><span>Show Pinyin</span><input type="checkbox" id="setting-pinyin-after"></label>
-            <label class="toggle-setting"><span>Show Hints</span><input type="checkbox" id="setting-hints-after"></label>
-            <label class="toggle-setting"><span>Show Translation</span><input type="checkbox" id="setting-trans-after"></label>
-            <label class="toggle-setting"><span>Auto-Speak Answer</span><input type="checkbox" id="setting-auto-speak-a"></label>
-          </div>
-
-          <div class="settings-group">
-            <h3>General</h3>
-            <label class="toggle-setting">
-              <span>Auto-Advance</span>
-              <input type="checkbox" id="setting-auto-advance">
-            </label>
-            <label class="toggle-setting">
-              <span>Sound Effects</span>
-              <input type="checkbox" id="setting-sfx">
-            </label>
-          </div>
         </div>
       </div>
       <p class="small-hint" style="margin-top: 1rem;">Changes apply to the next card.</p>
