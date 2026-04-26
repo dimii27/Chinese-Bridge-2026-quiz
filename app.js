@@ -1225,6 +1225,11 @@ function submitAnswer(method) {
           el.voiceTranscript.textContent = "Correct! (+2) Now read the answer text for +3 points.";
           el.voiceTranscript.style.color = "var(--accent)";
           
+          // Trigger Auto-read NOW (Step 1) so student hears it before they read it
+          if (settings.autoSpeakA) {
+              speak(currentCard.options[correctKey].hanzi, null, true);
+          }
+          
           const allBtns = el.optionsContainer.querySelectorAll('.option-btn');
           allBtns.forEach(b => {
               if (b.dataset.originalKey === correctKey) {
@@ -1295,9 +1300,13 @@ function submitAnswer(method) {
     
     // Auto-speak correct answer if enabled (delay to let SFX finish)
     if (settings.autoSpeakA) {
-      setTimeout(() => {
-        speak(currentCard.options[correctKey].hanzi, null, true);
-      }, 800);
+      const isTestStep1 = currentMode === 'test' && testStep === 1;
+      // If test step 1, we already triggered it above. 
+      if (!isTestStep1) {
+          setTimeout(() => {
+            speak(currentCard.options[correctKey].hanzi, null, true);
+          }, 800);
+      }
     }
   } else {
     try { SFX.play('wrong'); } catch(e) {}
