@@ -602,7 +602,15 @@ function setupSidebarListeners() {
   // Foldable sections
   document.querySelectorAll('.foldable-header').forEach(header => {
     header.onclick = () => {
-      header.parentElement.classList.toggle('active');
+      const group = header.parentElement;
+      const wasActive = group.classList.contains('active');
+      
+      // Auto-fold siblings
+      group.parentElement.querySelectorAll('.settings-group').forEach(g => g.classList.remove('active'));
+      
+      if (!wasActive) {
+        group.classList.add('active');
+      }
     };
   });
 
@@ -1285,8 +1293,11 @@ function submitAnswer(method) {
   }
 
   // Auto-advance logic (runs independently of SFX)
-  if (isCorrect && settings.autoAdvance && currentMode !== 'test') {
-    const advanceDelay = settings.autoSpeakA ? 2500 : 1500;
+  const shouldAutoAdvance = (settings.autoAdvance !== false) && (currentMode !== 'test' || testStep === 2);
+  
+  if (isCorrect && shouldAutoAdvance) {
+    const advanceDelay = settings.autoSpeakA ? 2800 : 1800; // Slightly longer to be safe
+    console.log(`Auto-advance scheduled in ${advanceDelay}ms`);
     setTimeout(() => {
       if (!currentAnswerSelected) return; // Guard: card already changed
       if (currentMode === 'study' || currentMode === 'review') {
@@ -1552,6 +1563,9 @@ function speak(text, onEndCallback = null, forcePlay = false) {
      return;
   }
   
+  if (!text) return;
+  console.log(`TTS: Speaking "${text.substring(0, 20)}..." (force=${forcePlay})`);
+  
   // If not forced and already speaking, toggle it off
   if (!forcePlay && synth.speaking) {
       synth.cancel();
@@ -1580,7 +1594,7 @@ function speak(text, onEndCallback = null, forcePlay = false) {
     } catch(e) {
       console.error("TTS Speak failed", e);
     }
-  }, 50);
+  }, 100);
 }
 
 el.btnTtsQuestion.onclick = () => {
