@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Chinese Bridge SRS</title>
   <meta name="theme-color" content="#121212">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="BridgeQuiz">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%233b82f6'%3E%3Cpath d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+SC:wght@400;700;900&display=swap" rel="stylesheet">
@@ -123,6 +127,7 @@
           <span class="status-text">Local Only</span>
           <button id="btn-sync-now" title="Sync with Cloud">🔄</button>
         </div>
+        <button id="btn-install-pwa" class="btn-primary small hidden" style="width:100%; background: var(--success); margin-bottom: 0.5rem;">📲 Install App</button>
         <button id="btn-logout" class="icon-btn" style="width:100%">Logout & Switch</button>
       </div>
     </aside>
@@ -132,6 +137,7 @@
       <header class="mobile-header">
          <button id="btn-toggle-left" class="icon-btn">☰</button>
          <span class="header-info">
+           <span id="quiz-xp-badge" class="xp-badge-header hidden">+<span id="quiz-xp-val">0</span> XP</span>
            <span id="score-display" class="hidden">Score: <span id="current-score">0</span></span>
            <span class="countdown-inline"><span id="days-remaining-header"></span>d left</span>
          </span>
@@ -140,19 +146,62 @@
 
       <!-- Home Screen -->
       <div id="view-home" class="view">
-        <div class="hero">
-          <h1>Welcome back.</h1>
-          <p>Select a mode from the sidebar to begin.</p>
+        <div class="hero gamified-hero">
+          <div class="hero-header">
+            <div class="streak-badge">
+              <span class="streak-icon">🔥</span>
+              <span id="stat-daily-streak">0</span> day streak
+            </div>
+            <div class="level-badge">
+              Lv. <span id="stat-level">1</span>
+            </div>
+          </div>
+          <h1>Welcome back, <span id="stat-username-greet">User</span>!</h1>
+          
+          <div class="xp-container">
+            <div class="xp-label">XP: <span id="stat-xp-current">0</span> / <span id="stat-xp-next">100</span></div>
+            <div class="xp-bar-bg">
+              <div id="xp-bar-fill" class="xp-bar-fill" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <button id="btn-start-study-hero" class="btn-primary large-hero-btn">CONTINUE STUDYING</button>
         </div>
-        <div class="quick-stats">
-            <div class="stat-card">
-               <h2 id="stat-mastered">0</h2>
-               <p>Mastered (>3d)</p>
+
+        <div class="home-grid">
+            <div class="stat-card goal-card">
+               <h3>Today's Goal</h3>
+               <div class="goal-progress-container">
+                 <svg class="goal-ring" viewBox="0 0 36 36">
+                   <path class="ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                   <path id="goal-ring-fill" class="ring-fill" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                 </svg>
+                 <div class="goal-text">
+                    <span id="stat-goal-done">0</span>/<span id="stat-goal-total">10</span>
+                    <small>Mastered</small>
+                 </div>
+               </div>
+               <p id="stat-goal-hint" class="small-hint">Master 5 more today to stay on track.</p>
             </div>
+
             <div class="stat-card">
-               <h2 id="stat-learning">0</h2>
-               <p>Learning</p>
+               <h3>Knowledge</h3>
+               <div class="stat-main-val" id="stat-mastered">0</div>
+               <p>Mastered Cards</p>
             </div>
+            
+            <div class="stat-card">
+               <h3>Learning</h3>
+               <div class="stat-main-val" id="stat-learning">0</div>
+               <p>Active Review</p>
+            </div>
+        </div>
+
+        <div class="leaderboard-section">
+          <h3>🏆 Student Leaderboard</h3>
+          <div id="leaderboard-list" class="leaderboard-list">
+             <p class="small-hint">Loading competition stats...</p>
+          </div>
         </div>
       </div>
       
@@ -314,6 +363,14 @@
           <label class="toggle-setting">
             <span>Require Confirm</span>
             <input type="checkbox" id="setting-confirm">
+          </label>
+          <label class="toggle-setting">
+            <span>Auto-Advance</span>
+            <input type="checkbox" id="setting-auto-advance">
+          </label>
+          <label class="toggle-setting">
+            <span>Sound Effects</span>
+            <input type="checkbox" id="setting-sfx">
           </label>
         </div>
       </div>

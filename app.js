@@ -44,7 +44,60 @@ let settings = {
   studyOrder: 'sequential',
   rangeStart: 1,
   rangeEnd: 100,
-  showId: false
+  showId: false,
+  autoAdvance: true,
+  sfx: false
+};
+
+// --- SFX Module (Web Audio API) ---
+const SFX = {
+  ctx: null,
+  init() {
+    if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  },
+  play(type) {
+    if (!settings.sfx) return;
+    this.init();
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    
+    const now = this.ctx.currentTime;
+    
+    if (type === 'correct') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(523.25, now); // C5
+      osc.frequency.exponentialRampToValueAtTime(880, now + 0.1); // A5
+      gain.gain.setValueAtTime(0.1, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+      osc.start(now);
+      osc.stop(now + 0.3);
+    } else if (type === 'wrong') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(220, now); // A3
+      osc.frequency.exponentialRampToValueAtTime(110, now + 0.2); // A2
+      gain.gain.setValueAtTime(0.1, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+      osc.start(now);
+      osc.stop(now + 0.4);
+    } else if (type === 'level') {
+      // Fanfare
+      [523, 659, 783, 1046].forEach((f, i) => {
+        const o = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        o.connect(g); g.connect(this.ctx.destination);
+        o.frequency.value = f;
+        g.gain.setValueAtTime(0, now + (i * 0.1));
+        g.gain.linearRampToValueAtTime(0.1, now + (i * 0.1) + 0.05);
+        g.gain.linearRampToValueAtTime(0, now + 0.5);
+        o.start(now + (i * 0.1));
+        o.stop(now + 0.6);
+      });
+    }
+  }
 };
 
 // Stable shuffled key order (so toggles don't rescramble)
@@ -138,6 +191,27 @@ const el = {
   btnToggleRight: document.getElementById('btn-toggle-right'),
   btnCloseLeft: document.getElementById('btn-close-left'),
   btnCloseRight: document.getElementById('btn-close-right'),
+  btnInstallPWA: document.getElementById('btn-install-pwa'),
+  
+  // Gamified Stats
+  statUsernameGreet: document.getElementById('stat-username-greet'),
+  statDailyStreak: document.getElementById('stat-daily-streak'),
+  statLevel: document.getElementById('stat-level'),
+  statXpCurrent: document.getElementById('stat-xp-current'),
+  statXpNext: document.getElementById('stat-xp-next'),
+  xpBarFill: document.getElementById('xp-bar-fill'),
+  statGoalDone: document.getElementById('stat-goal-done'),
+  statGoalTotal: document.getElementById('stat-goal-total'),
+  statGoalHint: document.getElementById('stat-goal-hint'),
+  goalRingFill: document.getElementById('goal-ring-fill'),
+  leaderboardList: document.getElementById('leaderboard-list'),
+  btnStartStudyHero: document.getElementById('btn-start-study-hero'),
+  
+  quizXpBadge: document.getElementById('quiz-xp-badge'),
+  quizXpVal: document.getElementById('quiz-xp-val'),
+
+  togSfx: document.getElementById('setting-sfx'),
+  togAutoAdvance: document.getElementById('setting-auto-advance'),
 };
 
 // --- Core Button Listeners ---
@@ -156,14 +230,15 @@ async function init() {
     return;
   }
 
+  setupPWAInstall();
+
   if (username) {
-    loadSettings(); // Load user-specific settings
+    loadSettings(); 
     updateCountdown();
     el.loginModal.classList.add('hidden');
     el.app.classList.remove('hidden');
     el.displayUsername.textContent = username;
     
-    // Add Sync button listener
     el.btnSyncNow.onclick = async () => {
       updateCloudStatus('syncing', 'Syncing...');
       await fetchProgressFromServer(true); 
@@ -173,12 +248,41 @@ async function init() {
     setupButtonListeners();
     setupSidebarListeners();
     renderSidebar();
-    goHome(); // Ensure we start at home
+    updateStreak();
+    updateLeaderboard();
+    goHome(); 
   } else {
     el.loginModal.classList.remove('hidden');
     el.app.classList.add('hidden');
     setupButtonListeners();
   }
+}
+
+// --- PWA Installation ---
+let deferredPrompt;
+function setupPWAInstall() {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (el.btnInstallPWA) el.btnInstallPWA.classList.remove('hidden');
+  });
+
+  if (el.btnInstallPWA) {
+    el.btnInstallPWA.onclick = async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        el.btnInstallPWA.classList.add('hidden');
+      }
+      deferredPrompt = null;
+    };
+  }
+
+  window.addEventListener('appinstalled', () => {
+    if (el.btnInstallPWA) el.btnInstallPWA.classList.add('hidden');
+    deferredPrompt = null;
+  });
 }
 
 function updateCloudStatus(state, text) {
@@ -536,7 +640,8 @@ function goHome() {
 }
 
 function updateCountdown() {
-  const target = new Date('2026-05-09T00:00:00').getTime();
+  // Safari-friendly date format
+  const target = new Date('2026/05/09 00:00:00').getTime();
   const now = new Date().getTime();
   const diff = target - now;
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
@@ -623,6 +728,104 @@ function goHome() {
   el.modeBtns.forEach(b => b.classList.remove('active'));
   currentMode = 'home';
   switchView('view-home');
+  renderHomeStats();
+}
+
+function renderHomeStats() {
+  if (!username) return;
+  el.statUsernameGreet.textContent = username;
+  
+  // SRS Stats
+  let mastered = 0;
+  let learning = 0;
+  questions.forEach(q => {
+    const p = progress[q.id];
+    if (p) {
+      if (p.interval >= 4320) mastered++;
+      else learning++;
+    }
+  });
+  el.statMastered.textContent = mastered;
+  el.statLearning.textContent = learning;
+
+  // XP & Levels
+  const xp = progress.totalXP || 0;
+  const level = Math.floor(Math.sqrt(xp / 50)) + 1;
+  const currentLevelXp = Math.pow(level - 1, 2) * 50;
+  const nextLevelXp = Math.pow(level, 2) * 50;
+  const progressInLevel = xp - currentLevelXp;
+  const neededForLevel = nextLevelXp - currentLevelXp;
+  const perc = Math.min(100, (progressInLevel / neededForLevel) * 100);
+
+  el.statLevel.textContent = level;
+  el.statXpCurrent.textContent = Math.floor(xp);
+  el.statXpNext.textContent = nextLevelXp;
+  el.xpBarFill.style.width = perc + '%';
+
+  // Daily Streak
+  el.statDailyStreak.textContent = progress.dailyStreak || 0;
+
+  // Daily Goal Calculation
+  // Target: master all by competitionDate - 2 days
+  const targetDate = new Date('2026/05/07 00:00:00').getTime();
+  const now = Date.now();
+  const daysLeft = Math.ceil((targetDate - now) / (1000 * 60 * 60 * 24));
+  const remainingToMaster = Math.max(0, questions.length - mastered);
+  
+  const dailyTarget = daysLeft > 0 ? Math.ceil(remainingToMaster / daysLeft) : remainingToMaster;
+  
+  // Track how many we mastered TODAY (using updatedAt)
+  const todayStart = new Date().setHours(0,0,0,0);
+  let masteredToday = 0;
+  questions.forEach(q => {
+    const p = progress[q.id];
+    if (p && p.interval >= 4320 && p.updatedAt >= todayStart) masteredToday++;
+  });
+
+  el.statGoalDone.textContent = masteredToday;
+  el.statGoalTotal.textContent = dailyTarget;
+  
+  const goalPerc = dailyTarget > 0 ? Math.min(100, (masteredToday / dailyTarget) * 100) : 100;
+  el.goalRingFill.style.strokeDasharray = `${goalPerc}, 100`;
+  
+  if (masteredToday >= dailyTarget) {
+    el.statGoalHint.textContent = "Goal reached! You are on track. 🏆";
+    el.statGoalHint.style.color = "var(--success)";
+  } else {
+    el.statGoalHint.textContent = `Master ${dailyTarget - masteredToday} more today to stay on track.`;
+    el.statGoalHint.style.color = "var(--text-secondary)";
+  }
+}
+
+async function updateLeaderboard() {
+  if (!el.leaderboardList) return;
+  try {
+    const snapshot = await db.collection('progress').get();
+    const players = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      players.push({
+        name: doc.id,
+        xp: data.totalXP || 0
+      });
+    });
+    
+    players.sort((a, b) => b.xp - a.xp);
+    
+    el.leaderboardList.innerHTML = '';
+    players.slice(0, 5).forEach((p, i) => {
+      const item = document.createElement('div');
+      item.className = 'leaderboard-item' + (p.name === username ? ' me' : '');
+      item.innerHTML = `
+        <span class="rank">${i + 1}</span>
+        <span class="name">${p.name}</span>
+        <span class="xp">${Math.floor(p.xp)} XP</span>
+      `;
+      el.leaderboardList.appendChild(item);
+    });
+  } catch (err) {
+    console.error("Leaderboard fetch failed", err);
+  }
 }
 
 el.modeBtns.forEach(btn => {
@@ -1032,7 +1235,64 @@ function submitAnswer(method) {
   }
   
   updateDisplay();
+  
+  // Gamification: Award XP
+  const xpGain = isCorrect ? 10 : 5;
+  addXP(xpGain);
+  
+  if (isCorrect) {
+    SFX.play('correct');
+    el.card.classList.add('correct-glow');
+    setTimeout(() => el.card.classList.remove('correct-glow'), 600);
+  } else {
+    SFX.play('wrong');
+    el.card.classList.add('wrong-shake');
+    setTimeout(() => el.card.classList.remove('wrong-shake'), 400);
+  }
+
   speak(currentCard.options[correctKey].hanzi, null, true);
+
+  // Auto-advance logic
+  if (isCorrect && settings.autoAdvance && currentMode !== 'test') {
+    setTimeout(() => {
+      if (currentAnswerSelected) nextCard();
+    }, 1200);
+  }
+}
+
+function addXP(amount) {
+  const oldLevel = Math.floor(Math.sqrt((progress.totalXP || 0) / 50)) + 1;
+  progress.totalXP = (progress.totalXP || 0) + amount;
+  const newLevel = Math.floor(Math.sqrt(progress.totalXP / 50)) + 1;
+  
+  if (newLevel > oldLevel) {
+    SFX.play('level');
+    showToast(`Level Up! You are now Level ${newLevel} 🌟`);
+  }
+  
+  // Show floating XP badge
+  el.quizXpVal.textContent = amount;
+  el.quizXpBadge.classList.remove('hidden');
+  setTimeout(() => el.quizXpBadge.classList.add('hidden'), 1500);
+  
+  saveProgress();
+}
+
+function showToast(text) {
+  let toast = document.querySelector('.streak-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.className = 'streak-toast';
+    document.body.appendChild(toast);
+  }
+  toast.innerHTML = `<span>${text}</span>`;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+function saveProgress() {
+  localStorage.setItem('srs_progress_' + username, JSON.stringify(progress));
+  syncProgressToServer();
 }
 
 function showFeedbackControls() {
@@ -1301,6 +1561,25 @@ function saveSettings() {
   localStorage.setItem('srs_settings_' + username, JSON.stringify(settings));
 }
 
+function updateStreak() {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const lastDate = progress.lastDate || 0;
+  
+  if (lastDate === today) return; // Already counted today
+  
+  const yesterday = today - (24 * 60 * 60 * 1000);
+  if (lastDate === yesterday) {
+    progress.dailyStreak = (progress.dailyStreak || 0) + 1;
+    showToast(`🔥 ${progress.dailyStreak} Day Streak!`);
+  } else {
+    progress.dailyStreak = 1;
+  }
+  
+  progress.lastDate = today;
+  saveProgress();
+}
+
 // Lightweight listener: only updates display, never rescrambles or restarts TTS
 function setupDisplaySettingListener(element, key) {
   if (!element) return;
@@ -1336,5 +1615,16 @@ setupDisplaySettingListener(el.togShowId, 'showId');
 
 // Structural settings (reshuffle required)
 setupStructuralSettingListener(el.togScramble, 'scramble');
+
+// Extra Gamification listeners
+setupDisplaySettingListener(el.togSfx, 'sfx');
+setupDisplaySettingListener(el.togAutoAdvance, 'autoAdvance');
+
+if (el.btnStartStudyHero) {
+  el.btnStartStudyHero.onclick = () => {
+    currentMode = 'study';
+    startMode('study');
+  };
+}
 
 init();
