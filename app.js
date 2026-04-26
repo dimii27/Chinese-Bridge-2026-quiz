@@ -1291,6 +1291,8 @@ function submitAnswer(method) {
     xpGain = 2; // Mistake XP
   }
   
+  addXP(xpGain);
+  
   if (isCorrect) {
     // Speak BEFORE any UI updates to ensure call stack is fresh
     if (settings.autoSpeakA) {
@@ -1573,26 +1575,6 @@ function stopSTT() {
   }
 }
 
-function speak(text, onEndCallback = null, forcePlay = false) {
-  if (!synth) {
-     if(onEndCallback) onEndCallback();
-     return;
-  }
-  
-  if (!text) return;
-  console.log(`TTS: Speaking "${text.substring(0, 20)}..." (force=${forcePlay})`);
-  
-  // If not forced and already speaking, toggle it off
-  if (!forcePlay && synth.speaking) {
-      console.log("TTS: Manually stopping current speech.");
-      synth.cancel();
-      // Reset transcript message if we stop manually
-      if (el.voiceTranscript.textContent === "Reading question...") {
-          el.voiceTranscript.textContent = "Listening paused.";
-      }
-      return;
-  }
-  
 function speak(text, onEndCallback = null, forcePlay = false) {
   if (!synth || !text) return;
   console.log("TTS: Speaking ->", text.substring(0, 30));
