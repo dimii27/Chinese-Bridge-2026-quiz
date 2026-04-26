@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bridge-srs-v34';
+const CACHE_NAME = 'bridge-srs-v35';
 const urlsToCache = [
   '/',
   '/index.html',

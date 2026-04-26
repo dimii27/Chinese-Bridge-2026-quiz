@@ -1291,17 +1291,16 @@ function submitAnswer(method) {
     xpGain = 2; // Mistake XP
   }
   
-  addXP(xpGain);
-  
   if (isCorrect) {
+    // Speak BEFORE any UI updates to ensure call stack is fresh
+    if (settings.autoSpeakA) {
+      console.log("TTS: Triggering auto-read");
+      speak(currentCard.options[correctKey].hanzi, null, true);
+    }
+    
     try { SFX.play('correct'); } catch(e) {}
     el.card.classList.add('correct-glow');
     setTimeout(() => el.card.classList.remove('correct-glow'), 600);
-    
-    // Auto-speak correct answer if enabled (IMMEDIATE for Safari compatibility)
-    if (settings.autoSpeakA) {
-      speak(currentCard.options[correctKey].hanzi, null, true);
-    }
   } else {
     try { SFX.play('wrong'); } catch(e) {}
     el.card.classList.add('wrong-shake');
@@ -1312,17 +1311,16 @@ function submitAnswer(method) {
   const shouldAutoAdvance = (settings.autoAdvance !== false) && (currentMode !== 'test' || testStep === 2);
   
   if (isCorrect && shouldAutoAdvance) {
-    const advanceDelay = 2000; 
+    const advanceDelay = 2200; 
     console.log(`Auto-advance scheduled in ${advanceDelay}ms`);
+    showToast("✓ Correct! Next card soon...");
+    
     setTimeout(() => {
-      // Re-verify we haven't manually moved on
-      if (currentAnswerSelected) {
-          if (currentMode === 'study' || currentMode === 'review') {
-            processPracticeAnswer(1);
-          } else {
-            nextCard();
-          }
-      }
+        if (currentMode === 'study' || currentMode === 'review') {
+          processPracticeAnswer(1);
+        } else {
+          nextCard();
+        }
     }, advanceDelay);
   }
 }
@@ -1595,39 +1593,26 @@ function speak(text, onEndCallback = null, forcePlay = false) {
       return;
   }
   
-  synth.cancel();
+function speak(text, onEndCallback = null, forcePlay = false) {
+  if (!synth || !text) return;
+  console.log("TTS: Speaking ->", text.substring(0, 30));
   
-  // Robust HTML stripping so TTS doesn't read tags like <ruby> or <rt>
-  const stripHTML = (str) => {
-    const tmp = document.createElement("DIV");
-    tmp.innerHTML = str;
-    return tmp.textContent || tmp.innerText || "";
-  };
-  
-  const cleanText = stripHTML(text).replace(/_+/g, ' ');
+  // Strip HTML
+  const tmp = document.createElement("DIV");
+  tmp.innerHTML = text;
+  const cleanText = (tmp.textContent || tmp.innerText || "").replace(/_+/g, ' ');
+
   const ut = new SpeechSynthesisUtterance(cleanText);
-  
-  // Better voice selection
-  const voices = synth.getVoices();
-  const zhVoice = voices.find(v => v.lang.includes('zh') && v.lang.includes('CN')) || 
-                  voices.find(v => v.lang.includes('zh'));
-  if (zhVoice) ut.voice = zhVoice;
-  
   ut.lang = 'zh-CN';
   ut.rate = 0.9;
-  if(onEndCallback) {
-     ut.onend = onEndCallback;
-     setTimeout(onEndCallback, 15000); 
+  
+  if (onEndCallback) ut.onend = onEndCallback;
+  
+  if (forcePlay) {
+      synth.cancel(); 
   }
   
-  // Robustness: brief delay to ensure cancel finished
-  setTimeout(() => {
-    try {
-      synth.speak(ut);
-    } catch(e) {
-      console.error("TTS Speak failed", e);
-    }
-  }, 100);
+  synth.speak(ut);
 }
 
 el.btnTtsQuestion.onclick = () => {
