@@ -723,6 +723,25 @@ mark.keyword {
   display: flex;
 }
 
+.settings-group {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.settings-group:last-child {
+  border-bottom: none;
+}
+
+.settings-group h3 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+  font-weight: 800;
+}
+
 .setting-item, .toggle-setting {
   display: flex;
   justify-content: space-between;

@@ -46,7 +46,15 @@ let settings = {
   rangeEnd: 100,
   showId: false,
   autoAdvance: true,
-  sfx: false
+  sfx: false,
+  pinyinBefore: false,
+  hintsBefore: true,
+  transBefore: false,
+  pinyinAfter: true,
+  hintsAfter: true,
+  transAfter: true,
+  autoSpeakQ: false,
+  autoSpeakA: false
 };
 
 // --- SFX Module (Web Audio API) ---
@@ -212,6 +220,16 @@ const el = {
 
   togSfx: document.getElementById('setting-sfx'),
   togAutoAdvance: document.getElementById('setting-auto-advance'),
+  
+  togPinyinBefore: document.getElementById('setting-pinyin-before'),
+  togHintsBefore: document.getElementById('setting-hints-before'),
+  togTransBefore: document.getElementById('setting-trans-before'),
+  togAutoSpeakQ: document.getElementById('setting-auto-speak-q'),
+  
+  togPinyinAfter: document.getElementById('setting-pinyin-after'),
+  togHintsAfter: document.getElementById('setting-hints-after'),
+  togTransAfter: document.getElementById('setting-trans-after'),
+  togAutoSpeakA: document.getElementById('setting-auto-speak-a'),
 };
 
 // --- Core Button Listeners ---
@@ -1037,33 +1055,24 @@ function updateDisplay() {
   
   const isTest = currentMode === 'test';
   const postAnswer = currentAnswerSelected;
-  const allowSettings = !isTest || postAnswer;
   
-  const showId = allowSettings ? settings.showId : false;
-  const showPinyin = allowSettings ? settings.pinyin : false;
-  const showTrans = allowSettings ? settings.translations : false;
-  const showHints = allowSettings ? settings.hints : false;
-  const showAnswerPinyin = allowSettings ? settings.answerPinyin : false;
+  // Use Before/After settings
+  const showPinyin = postAnswer ? settings.pinyinAfter : settings.pinyinBefore;
+  const showTrans = postAnswer ? settings.transAfter : settings.transBefore;
+  const showHints = postAnswer ? settings.hintsAfter : settings.hintsBefore;
+  
+  // Special rule for non-test modes: if postAnswer, always show everything important
+  const finalShowPinyin = isTest ? showPinyin : (postAnswer ? true : showPinyin);
+  const finalShowTrans = isTest ? showTrans : (postAnswer ? true : showTrans);
 
-  if (showId) {
-    el.questionIdLabel.textContent = `Question #${currentCard.id}`;
-    el.questionIdLabel.classList.remove('hidden');
-  } else {
-    el.questionIdLabel.classList.add('hidden');
-  }
-  
   function processBlanks(html, isPinyin = false) {
-    // 1. Handle explicit blanks (____ or ___)
     if (html.includes('____') || html.includes('___')) {
        return html.replace(/____/g, '<span class="blank-slot" aria-hidden="true">____</span>')
                   .replace(/___/g, '<span class="blank-slot" aria-hidden="true">____</span>');
     }
-    
-    // 2. Fallback: Try to hide the answer if it's in the text (only for non-test mode or post-answer)
     if (!currentAnswerSelected) {
       const ansHanzi = currentCard.options[currentCard.answer].hanzi;
       if (ansHanzi) {
-        // Handle ellipsis (e.g., "与其...不如")
         if (ansHanzi.includes('...')) {
            const parts = ansHanzi.split('...');
            let result = html;
@@ -1077,7 +1086,6 @@ function updateDisplay() {
         } else if (!isPinyin && html.includes(ansHanzi)) {
            return html.replace(ansHanzi, '<span class="blank-slot" aria-hidden="true">____</span>');
         } else if (!isPinyin && !html.includes(ansHanzi) && !html.includes('blank-slot')) {
-           // If no blank and no answer match, just append one (common for older source data)
            return html + ' <span class="blank-slot" aria-hidden="true">____</span>';
         }
       }
@@ -1085,25 +1093,19 @@ function updateDisplay() {
     return html;
   }
 
-  if (showPinyin) {
+  if (finalShowPinyin) {
     el.questionText.innerHTML = processBlanks(currentCard.chinese_pinyin, true);
-    el.questionPinyin.classList.add('hidden');
+    el.questionText.classList.add('show-pinyin');
   } else {
-    const baseHtml = settings.keywords ? currentCard.chinese_keywords : currentCard.chinese;
+    const baseHtml = showHints ? currentCard.chinese_keywords : currentCard.chinese;
     el.questionText.innerHTML = processBlanks(baseHtml, false);
-    el.questionPinyin.classList.add('hidden');
+    el.questionText.classList.remove('show-pinyin');
   }
   
   el.questionTranslation.textContent = currentCard.english;
-
-  if(showTrans && currentCard.english) {
-    el.translationSection.classList.remove('hidden');
-  } else {
-    const isStudy = currentMode === 'study' || currentMode === 'review';
-    if (!currentAnswerSelected || !isStudy) el.translationSection.classList.add('hidden');
-    else if (currentAnswerSelected && isStudy) el.translationSection.classList.remove('hidden');
-  }
+  el.translationSection.classList.toggle('hidden', !finalShowTrans);
   
+  // Update Options
   const btns = el.optionsContainer.querySelectorAll('.option-btn');
   btns.forEach(btn => {
     const key = btn.dataset.originalKey;
@@ -1111,7 +1113,9 @@ function updateDisplay() {
     const valObj = currentCard.options[key];
     if (!valObj) return;
     
-    let mainHtml = `<span class="option-main">${displayLetter}. ${showAnswerPinyin ? valObj.pinyin : valObj.hanzi}</span>`;
+    // In test mode, hide option Pinyin until answer
+    const showOptionPinyin = postAnswer; 
+    let mainHtml = `<span class="option-main">${displayLetter}. ${showOptionPinyin ? valObj.pinyin : valObj.hanzi}</span>`;
     if (showHints && valObj.hint) {
       mainHtml += `<span class="option-hint">${valObj.hint}</span>`;
     }
@@ -1236,14 +1240,28 @@ function submitAnswer(method) {
   
   updateDisplay();
   
-  // Gamification: Award XP
-  const xpGain = isCorrect ? 10 : 5;
+  // Tiered XP Rewards
+  // 1. Choosing only (Click): 4 XP (approx 2/5 of 10)
+  // 2. Choosing (Voice/Click) + Correct Reading: 10 XP total
+  let xpGain = 0;
+  if (isCorrect) {
+    if (method === 'click') xpGain = 4;
+    else if (method === 'voice') xpGain = 6; // Voice choice gets slightly more
+  } else {
+    xpGain = 2; // Mistake XP
+  }
+  
   addXP(xpGain);
   
   if (isCorrect) {
     SFX.play('correct');
     el.card.classList.add('correct-glow');
     setTimeout(() => el.card.classList.remove('correct-glow'), 600);
+    
+    // Auto-speak correct answer if enabled
+    if (settings.autoSpeakA) {
+      setTimeout(() => speak(currentCard.options[correctKey].hanzi), 500);
+    }
   } else {
     SFX.play('wrong');
     el.card.classList.add('wrong-shake');
@@ -1391,9 +1409,7 @@ if (recognition) {
     
     let transcript = '';
     for (let i = event.resultIndex; i < event.results.length; ++i) {
-      for (let alt = 0; alt < event.results[i].length; alt++) {
-        transcript += event.results[i][alt].transcript;
-      }
+      transcript += event.results[i][0].transcript;
     }
     
     el.voiceTranscript.textContent = `Heard: "${transcript}"`;
@@ -1401,7 +1417,11 @@ if (recognition) {
     
     const cleanTranscript = transcript.replace(/\s+/g, '').toLowerCase();
     
-    const letterMatch = cleanTranscript.match(/[abcd]/i);
+    // Pattern for "My answer is..." (我的答案是...)
+    const myAnswerPattern = /^(我的答案是|答案是|i think it's|the answer is)/;
+    const strippedTranscript = cleanTranscript.replace(myAnswerPattern, '');
+
+    const letterMatch = strippedTranscript.match(/[abcd]/i);
     let spokenDisplayLetter = null;
     if (letterMatch) spokenDisplayLetter = letterMatch[0].toUpperCase();
     
@@ -1419,6 +1439,8 @@ if (recognition) {
             if (selectedKey === correctKey) isCorrect = true;
         }
     }
+    
+    // Direct pronunciation match
     if (!selectedKey && cleanTranscript.includes(correctHanzi.toLowerCase())) {
         isCorrect = true;
         selectedKey = correctKey;
@@ -1426,16 +1448,17 @@ if (recognition) {
 
     if (isCorrect || testStep === 2) {
       if (testStep === 1 && isCorrect) {
-          el.voiceTranscript.textContent = `✓ Choice Correct! Now read the text out loud (+3 pts)`;
+          el.voiceTranscript.textContent = `✓ Choice Correct! Now read the text out loud (+5 XP total)`;
           el.voiceTranscript.style.color = "#10b981";
           currentSelectedKey = selectedKey;
-          submitAnswer('voice');
+          submitAnswer('voice'); 
       } else if (testStep === 2) {
           if (cleanTranscript.includes(correctHanzi.toLowerCase())) {
-              el.voiceTranscript.textContent = `✓ Reading Correct! (+3 pts)`;
+              el.voiceTranscript.textContent = `✓ Perfect Pronunciation! (+5 bonus XP)`;
               el.voiceTranscript.style.color = "#10b981";
               recognition.stop();
-              submitAnswer('voice');
+              addXP(5); 
+              submitAnswer('voice'); 
           }
       }
     } else if (testStep === 1 && spokenDisplayLetter && selectedKey) {
@@ -1546,14 +1569,18 @@ function loadSettings() {
   const data = localStorage.getItem('srs_settings_' + username);
   if (data) settings = {...settings, ...JSON.parse(data)};
   
-  el.togTrans.checked = settings.translations;
-  el.togPinyin.checked = settings.pinyin;
-  if (el.togAnswerPinyin) el.togAnswerPinyin.checked = settings.answerPinyin;
-  el.togHints.checked = settings.hints;
-  el.togKey.checked = settings.keywords;
-  el.togConfirm.checked = settings.confirm;
-  el.togScramble.checked = settings.scramble;
-  if (el.togShowId) el.togShowId.checked = settings.showId;
+  if (el.togPinyinBefore) el.togPinyinBefore.checked = settings.pinyinBefore;
+  if (el.togHintsBefore) el.togHintsBefore.checked = settings.hintsBefore;
+  if (el.togTransBefore) el.togTransBefore.checked = settings.transBefore;
+  if (el.togAutoSpeakQ) el.togAutoSpeakQ.checked = settings.autoSpeakQ;
+  
+  if (el.togPinyinAfter) el.togPinyinAfter.checked = settings.pinyinAfter;
+  if (el.togHintsAfter) el.togHintsAfter.checked = settings.hintsAfter;
+  if (el.togTransAfter) el.togTransAfter.checked = settings.transAfter;
+  if (el.togAutoSpeakA) el.togAutoSpeakA.checked = settings.autoSpeakA;
+
+  if (el.togAutoAdvance) el.togAutoAdvance.checked = settings.autoAdvance;
+  if (el.togSfx) el.togSfx.checked = settings.sfx;
 }
 
 function saveSettings() {
@@ -1605,20 +1632,21 @@ function setupStructuralSettingListener(element, key) {
 }
 
 // Display-only settings (don't reshuffle or restart TTS)
-setupDisplaySettingListener(el.togTrans, 'translations');
-setupDisplaySettingListener(el.togPinyin, 'pinyin');
-setupDisplaySettingListener(el.togAnswerPinyin, 'answerPinyin');
-setupDisplaySettingListener(el.togHints, 'hints');
-setupDisplaySettingListener(el.togKey, 'keywords');
-setupDisplaySettingListener(el.togConfirm, 'confirm');
-setupDisplaySettingListener(el.togShowId, 'showId');
-
-// Structural settings (reshuffle required)
-setupStructuralSettingListener(el.togScramble, 'scramble');
+// Removed old legacy listeners
 
 // Extra Gamification listeners
 setupDisplaySettingListener(el.togSfx, 'sfx');
 setupDisplaySettingListener(el.togAutoAdvance, 'autoAdvance');
+
+setupDisplaySettingListener(el.togPinyinBefore, 'pinyinBefore');
+setupDisplaySettingListener(el.togHintsBefore, 'hintsBefore');
+setupDisplaySettingListener(el.togTransBefore, 'transBefore');
+setupDisplaySettingListener(el.togAutoSpeakQ, 'autoSpeakQ');
+
+setupDisplaySettingListener(el.togPinyinAfter, 'pinyinAfter');
+setupDisplaySettingListener(el.togHintsAfter, 'hintsAfter');
+setupDisplaySettingListener(el.togTransAfter, 'transAfter');
+setupDisplaySettingListener(el.togAutoSpeakA, 'autoSpeakA');
 
 if (el.btnStartStudyHero) {
   el.btnStartStudyHero.onclick = () => {

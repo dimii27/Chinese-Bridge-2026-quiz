@@ -348,30 +348,33 @@
           <span class="fold-icon">▼</span>
         </div>
         <div class="foldable-content">
-          <label class="toggle-setting">
-            <span>Show Hints</span>
-            <input type="checkbox" id="setting-hints">
-          </label>
-          <label class="toggle-setting">
-            <span>Answer Pinyin</span>
-            <input type="checkbox" id="setting-answer-pinyin">
-          </label>
-          <label class="toggle-setting">
-            <span>Scramble Options</span>
-            <input type="checkbox" id="setting-scramble">
-          </label>
-          <label class="toggle-setting">
-            <span>Require Confirm</span>
-            <input type="checkbox" id="setting-confirm">
-          </label>
-          <label class="toggle-setting">
-            <span>Auto-Advance</span>
-            <input type="checkbox" id="setting-auto-advance">
-          </label>
-          <label class="toggle-setting">
-            <span>Sound Effects</span>
-            <input type="checkbox" id="setting-sfx">
-          </label>
+          <div class="settings-group">
+            <h3>Question Display</h3>
+            <label class="toggle-setting"><span>Pinyin</span><input type="checkbox" id="setting-pinyin-before"></label>
+            <label class="toggle-setting"><span>Hints</span><input type="checkbox" id="setting-hints-before"></label>
+            <label class="toggle-setting"><span>Translations</span><input type="checkbox" id="setting-trans-before"></label>
+            <label class="toggle-setting"><span>Auto-Speak Question</span><input type="checkbox" id="setting-auto-speak-q"></label>
+          </div>
+          
+          <div class="settings-group">
+            <h3>Answer Feedback</h3>
+            <label class="toggle-setting"><span>Show Pinyin</span><input type="checkbox" id="setting-pinyin-after"></label>
+            <label class="toggle-setting"><span>Show Hints</span><input type="checkbox" id="setting-hints-after"></label>
+            <label class="toggle-setting"><span>Show Translation</span><input type="checkbox" id="setting-trans-after"></label>
+            <label class="toggle-setting"><span>Auto-Speak Answer</span><input type="checkbox" id="setting-auto-speak-a"></label>
+          </div>
+
+          <div class="settings-group">
+            <h3>General</h3>
+            <label class="toggle-setting">
+              <span>Auto-Advance</span>
+              <input type="checkbox" id="setting-auto-advance">
+            </label>
+            <label class="toggle-setting">
+              <span>Sound Effects</span>
+              <input type="checkbox" id="setting-sfx">
+            </label>
+          </div>
         </div>
       </div>
       <p class="small-hint" style="margin-top: 1rem;">Changes apply to the next card.</p>
