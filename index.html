@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%233b82f6'%3E%3Cpath d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+SC:wght@400;700;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+SC:wght@400;700;900&family=Noto+Serif+SC:wght@400;700;900&family=Ma+Shan+Zheng&family=ZCOOL+XiaoWei&family=ZCOOL+QingKe+HuangYou&family=Liu+Jian+Mao+Cao&display=swap" rel="stylesheet">
   <!-- Firebase SDKs (Compat version for easy integration) -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -58,6 +58,46 @@
         </div>
       </div>
       <p class="small-hint">Check the gear icon (⚙️) for Pinyin and Translation settings.</p>
+      
+      <div class="changelog-section">
+        <h3>What's New</h3>
+        <ul class="changelog-list">
+          <li><strong>Adaptive Learning:</strong> The algorithm now tracks "Worst First" questions and fresh mistakes (within 24h) penalize intervals twice as hard.</li>
+          <li><strong>Pronunciation Mode:</strong> A dedicated view focusing on reading out loud.</li>
+          <li><strong>XP Economy:</strong> Voice correct (+8 XP), Click correct (+3 XP), Wrong (+1 XP). Long answers scale to 1.5×.</li>
+          <li><strong>Session Streak:</strong> Get bonuses for answering correctly in a row. Watch for the 🔥!</li>
+          <li><strong>Images & Appearance:</strong> Select questions now show reference photos. You can also customize your Chinese font and theme in Settings.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Welcome / What's New Modal (One-time) -->
+  <div id="welcome-modal" class="modal hidden">
+    <div class="modal-content welcome-modal-content">
+      <div class="welcome-header">
+        <h2>Ready for the Exam?</h2>
+        <p>We've supercharged the learning algorithm to prepare you for May 9th.</p>
+      </div>
+      <ul class="welcome-features">
+        <li>
+          <span class="feat-icon">🎙️</span>
+          <span class="feat-text"><strong>Pronunciation Focus:</strong> A new practice mode tests your reading accuracy out loud. Voice answers grant massive XP.</span>
+        </li>
+        <li>
+          <span class="feat-icon">🧠</span>
+          <span class="feat-text"><strong>Adaptive Algorithm:</strong> The "Worst First" queue dynamically updates every 3 questions so you never review what you already know.</span>
+        </li>
+        <li>
+          <span class="feat-icon">🔥</span>
+          <span class="feat-text"><strong>Session Streaks:</strong> Answer correctly in a row for escalating XP bonuses and fire animations.</span>
+        </li>
+        <li>
+          <span class="feat-icon">🎨</span>
+          <span class="feat-text"><strong>Appearance Settings:</strong> Customize fonts, toggle dark/light mode, and view photo references for specific questions.</span>
+        </li>
+      </ul>
+      <button id="btn-welcome-go" class="btn-primary">Let's Go!</button>
     </div>
   </div>
   <div id="profile-modal" class="modal hidden">
@@ -166,6 +206,7 @@
           </div>
 
           <button id="btn-start-study-hero" class="btn-primary large-hero-btn">CONTINUE STUDYING</button>
+          <button id="btn-pronunciation" class="btn-primary large-hero-btn pronunciation-btn">🎤 PRONUNCIATION PRACTICE</button>
         </div>
 
         <div class="home-grid">
@@ -219,10 +260,16 @@
       <!-- Quiz Screen -->
       <div id="view-quiz" class="view hidden">
         <div id="card" class="card">
+          <div id="question-bg-image" class="question-bg-image hidden"></div>
+          <span id="session-streak" class="session-streak hidden">
+            <span class="streak-fire">🔥</span>
+            <span id="streak-count">0</span>
+          </span>
           <div class="question-section">
             <div class="question-text-wrapper">
               <span id="question-id-label" class="hidden" style="font-size: 0.8rem; opacity: 0.5; margin-bottom: 0.2rem; display: block;">Question #1</span>
               <div id="question-pinyin" class="hidden"></div>
+              <img id="question-image" class="question-image hidden" alt="Question illustration">
               <h1 id="question-text"></h1>
             </div>
             <div class="question-controls">
@@ -241,6 +288,24 @@
 
           <div id="options-container" class="options">
             <!-- Options will be injected here -->
+          </div>
+
+          <!-- Pronunciation Practice Section -->
+          <div id="pronunciation-section" class="pronunciation-section hidden">
+            <div class="pron-card">
+              <p class="pron-label">Read this answer aloud:</p>
+              <div id="pron-answer-text" class="pron-answer-text"></div>
+              <div id="pron-answer-pinyin" class="pron-answer-pinyin"></div>
+              <p id="pron-transcript" class="pron-transcript"></p>
+            </div>
+            <div class="pron-buttons">
+              <button id="pron-nailed" class="control-btn good">✓ Nailed It</button>
+              <button id="pron-retry" class="control-btn hard">🔄 Again</button>
+              <button id="pron-skip" class="control-btn fail">✗ Can't Read</button>
+            </div>
+            <button id="pron-mic" class="icon-btn primary pron-mic-btn" title="Use Microphone">
+              🎙
+            </button>
           </div>
 
           <div id="confirm-section" class="hidden">
@@ -368,6 +433,38 @@
           <label class="toggle-setting">
             <span>Sound Effects</span>
             <input type="checkbox" id="setting-sfx">
+          </label>
+        </div>
+      </div>
+
+      <div class="settings-group foldable">
+        <div class="foldable-header">
+          <h3>Appearance</h3>
+          <span class="fold-icon">▼</span>
+        </div>
+        <div class="foldable-content">
+          <div class="setting-item">
+            <span>Chinese Font</span>
+            <select id="setting-font">
+              <option value="Noto Sans SC">Noto Sans</option>
+              <option value="Noto Serif SC">Noto Serif</option>
+              <option value="Ma Shan Zheng">Ma Shan Zheng</option>
+              <option value="ZCOOL XiaoWei">ZCOOL XiaoWei</option>
+              <option value="ZCOOL QingKe HuangYou">ZCOOL QingKe</option>
+              <option value="Liu Jian Mao Cao">Liu Jian Mao Cao</option>
+            </select>
+          </div>
+          <label class="toggle-setting">
+            <span>Randomize Font</span>
+            <input type="checkbox" id="setting-random-font">
+          </label>
+          <label class="toggle-setting">
+            <span>Light Theme</span>
+            <input type="checkbox" id="setting-light-theme">
+          </label>
+          <label class="toggle-setting">
+            <span>Image as Background</span>
+            <input type="checkbox" id="setting-image-bg">
           </label>
         </div>
       </div>

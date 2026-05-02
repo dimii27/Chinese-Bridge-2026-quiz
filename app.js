@@ -1,14 +1,29 @@
 // app.js
 
 let questions = [];
-let progress = {}; // { id: { interval: int, efactor: float, nextReview: timestamp, reps: int } }
+let progress = {}; // { id: { interval, efactor, nextReview, reps, correct, wrong, streak, recentMistakes[], lastAnsweredAt } }
 let score = 0;
-let currentMode = 'home'; // home, study, test, review
+let currentMode = 'home'; // home, study, test, review, pronunciation
 let currentDeckRange = 'all';
 let testStep = 1; // 1: Say A/B/C, 2: Read Text
 let currentSessionScore = 0;
 let testQueue = [];
 let username = localStorage.getItem('srs_username') || '';
+
+// --- Session Streak & Adaptive Sorting ---
+let sessionStreak = 0;
+let adaptiveCounter = 0; // counts answers since last re-sort
+const ADAPTIVE_INTERVAL = 3; // re-sort every N answers in Worst First mode
+
+// --- Chinese Fonts ---
+const CHINESE_FONTS = [
+  'Noto Sans SC',
+  'Noto Serif SC',
+  'Ma Shan Zheng',
+  'ZCOOL XiaoWei',
+  'ZCOOL QingKe HuangYou',
+  'Liu Jian Mao Cao'
+];
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -54,7 +69,12 @@ let settings = {
   showId: false,
   autoAdvance: true,
   sfx: false,
-  optionsPinyinBefore: false
+  optionsPinyinBefore: false,
+  // New settings
+  chineseFont: 'Noto Sans SC',
+  randomFont: false,
+  lightTheme: false,
+  imageBackground: false  // show question image as dimmed background
 };
 
 // --- SFX Module (Web Audio API) ---
@@ -177,6 +197,9 @@ const el = {
   btnShowHelp: document.getElementById('btn-show-help'),
   btnCloseHelp: document.getElementById('btn-close-help'),
   
+  welcomeModal: document.getElementById('welcome-modal'),
+  btnWelcomeGo: document.getElementById('btn-welcome-go'),
+  
   viewAdmin: document.getElementById('view-admin'),
   adminUserList: document.getElementById('admin-user-list'),
   btnAdminRefresh: document.getElementById('btn-admin-refresh'),
@@ -267,6 +290,13 @@ async function init() {
     updateStreak();
     updateLeaderboard();
     goHome(); 
+    
+    // One-time Welcome Modal
+    const welcomeKey = `welcomeShown_${username}`;
+    if (!localStorage.getItem(welcomeKey)) {
+      el.welcomeModal.classList.remove('hidden');
+      localStorage.setItem(welcomeKey, 'true');
+    }
   } else {
     el.loginModal.classList.remove('hidden');
     el.app.classList.add('hidden');
@@ -404,6 +434,8 @@ function setupButtonListeners() {
   el.btnCloseProfile.onclick = () => el.profileModal.classList.add('hidden');
   el.profileModal.onclick = (e) => { if(e.target === el.profileModal) el.profileModal.classList.add('hidden'); };
 
+  el.btnWelcomeGo.onclick = () => el.welcomeModal.classList.add('hidden');
+  
   // Export Backup
   el.btnExportBackup.onclick = (e) => {
     if (e) e.preventDefault();
@@ -983,6 +1015,8 @@ function renderSidebar() {
 function startMode(mode) {
   score = 0;
   currentMode = mode;
+  sessionStreak = 0;
+  adaptiveCounter = 0;
   el.currentScore.textContent = score;
   switchView('view-quiz');
   
@@ -992,9 +1026,19 @@ function startMode(mode) {
   } else if (mode === 'test') {
     testQueue = [...questions].sort(() => Math.random() - 0.5);
     el.scoreDisplay.classList.remove('hidden');
+  } else if (mode === 'pronunciation') {
+    el.scoreDisplay.classList.add('hidden');
+    // Sort by worst pronunciation mastery (low accuracy, many mistakes)
+    studyQueue = [...questions].sort((a, b) => getAdaptiveScore(a.id) - getAdaptiveScore(b.id));
+    currentStudyIndex = 0;
+    currentCard = studyQueue[0];
   }
   
-  nextCard();
+  if (mode !== 'pronunciation') {
+    nextCard();
+  } else {
+    renderCard();
+  }
 }
 
 function getNextCardForMode() {
@@ -1007,6 +1051,9 @@ function getNextCardForMode() {
       return card;
     }
     return null;
+  } else if (currentMode === 'pronunciation') {
+    const card = studyQueue[currentStudyIndex];
+    return card || null;
   }
   return null;
 }
@@ -1042,8 +1089,72 @@ function renderCard() {
   el.nextSection.classList.add('hidden');
   el.voiceAnswerSection.classList.add('hidden');
 
+  // --- Image Support ---
+  const imgEl = document.getElementById('question-image');
+  const bgImgEl = document.getElementById('question-bg-image');
+  if (imgEl) {
+    if (currentCard.image) {
+      if (settings.imageBackground && bgImgEl) {
+        // Background mode: dimmed/blurred behind card
+        imgEl.classList.add('hidden');
+        bgImgEl.style.backgroundImage = `url(${currentCard.image})`;
+        bgImgEl.classList.remove('hidden');
+      } else {
+        // Inline mode
+        imgEl.src = currentCard.image;
+        imgEl.classList.remove('hidden');
+        if (bgImgEl) bgImgEl.classList.add('hidden');
+      }
+    } else {
+      imgEl.classList.add('hidden');
+      if (bgImgEl) bgImgEl.classList.add('hidden');
+    }
+  }
+  
+  // --- Font Variety ---
+  const fontToUse = settings.randomFont
+    ? CHINESE_FONTS[Math.floor(Math.random() * CHINESE_FONTS.length)]
+    : (settings.chineseFont || 'Noto Sans SC');
+  el.questionText.style.fontFamily = `'${fontToUse}', sans-serif`;
+  
+  // --- Pronunciation Mode ---
+  const pronSection = document.getElementById('pronunciation-section');
+  if (currentMode === 'pronunciation') {
+    // Hide options, show correct answer for pronunciation practice
+    el.optionsContainer.classList.add('hidden');
+    if (pronSection) pronSection.classList.remove('hidden');
+    
+    const correctKey = currentCard.answer;
+    const correctOpt = currentCard.options[correctKey];
+    const pronText = document.getElementById('pron-answer-text');
+    const pronPinyin = document.getElementById('pron-answer-pinyin');
+    if (pronText) {
+      pronText.textContent = correctOpt.hanzi;
+      pronText.style.fontFamily = `'${fontToUse}', sans-serif`;
+    }
+    if (pronPinyin) pronPinyin.innerHTML = correctOpt.pinyin || '';
+    
+    // Show question context
+    updateDisplay();
+    
+    // TTS: speak the answer for them to repeat
+    setTimeout(() => {
+      speak(correctOpt.hanzi, null, true);
+    }, 500);
+    return;
+  } else {
+    el.optionsContainer.classList.remove('hidden');
+    if (pronSection) pronSection.classList.add('hidden');
+  }
+
   buildOptionsDom();
   updateDisplay();
+  
+  // Apply font to option buttons
+  const optBtns = el.optionsContainer.querySelectorAll('.option-btn');
+  optBtns.forEach(b => {
+    b.style.fontFamily = `'${fontToUse}', sans-serif`;
+  });
   
   // Auto-speak question (all modes, not just test)
   if (settings.autoSpeakQ && currentMode !== 'test') {
@@ -1280,26 +1391,67 @@ function submitAnswer(method) {
   
   updateDisplay();
   
-  // Tiered XP Rewards
-  // 1. Choosing only (Click): 4 XP (approx 2/5 of 10)
-  // 2. Choosing (Voice/Click) + Correct Reading: 10 XP total
+  // --- Smart XP System ---
   let xpGain = 0;
-  if (isCorrect) {
-    if (method === 'click') xpGain = 4;
-    else if (method === 'voice') xpGain = 6; // Voice choice gets slightly more
-  } else {
-    xpGain = 2; // Mistake XP
+  const now = Date.now();
+  const p = progress[currentCard.id] || {};
+  const lastAnswered = p.lastAnsweredAt || 0;
+  const timeSinceLast = now - lastAnswered;
+  const isAntiSpam = timeSinceLast < 30000 && !isCorrect; // < 30s re-answer while wrong
+  
+  // Track recentMistakes for adaptive scoring
+  if (!isCorrect && currentMode !== 'test') {
+    if (!p.recentMistakes) p.recentMistakes = [];
+    p.recentMistakes.push(now);
+    // Keep only last 10 mistakes
+    if (p.recentMistakes.length > 10) p.recentMistakes = p.recentMistakes.slice(-10);
+    p.lastAnsweredAt = now;
+    progress[currentCard.id] = p;
   }
   
-  addXP(xpGain);
-  
-  if (isCorrect) {
-    // Speak BEFORE any UI updates to ensure call stack is fresh
-    if (settings.autoSpeakA) {
-      console.log("TTS: Triggering auto-read");
-      speak(currentCard.options[correctKey].hanzi, null, true);
+  if (isAntiSpam) {
+    xpGain = 0; // Anti-spam: no XP for rapid wrong re-answers
+    showToast("⏳ Slow down and think!");
+  } else if (isCorrect) {
+    // Base XP by method
+    if (method === 'click') xpGain = 3;
+    else if (method === 'voice') xpGain = 8;
+    
+    // Long answer bonus (correct answer > 5 hanzi characters)
+    const correctHanzi = currentCard.options[correctKey].hanzi || '';
+    const hanziOnly = correctHanzi.replace(/[^\u4e00-\u9fff]/g, '');
+    if (hanziOnly.length > 5) {
+      xpGain = Math.round(xpGain * 1.5);
     }
     
+    // Session streak tracking
+    sessionStreak++;
+    const streakBonus = Math.min(sessionStreak, 5); // cap at +5
+    xpGain += streakBonus;
+    
+    // Update streak display
+    updateSessionStreakDisplay();
+  } else {
+    xpGain = 1; // Minimal XP for wrong answers
+    sessionStreak = 0; // Reset streak
+    updateSessionStreakDisplay();
+  }
+  
+  if (xpGain > 0) addXP(xpGain);
+  
+  // Adaptive sorting counter
+  if (settings.studyOrder === 'mastery' && (currentMode === 'study' || currentMode === 'review')) {
+    adaptiveCounter++;
+    if (adaptiveCounter >= ADAPTIVE_INTERVAL) {
+      adaptiveCounter = 0;
+      rebuildAdaptiveQueue();
+    }
+  }
+  
+  if (isCorrect) {
+    if (settings.autoSpeakA) {
+      speak(currentCard.options[correctKey].hanzi, null, true);
+    }
     try { SFX.play('correct'); } catch(e) {}
     el.card.classList.add('correct-glow');
     setTimeout(() => el.card.classList.remove('correct-glow'), 600);
@@ -1314,8 +1466,7 @@ function submitAnswer(method) {
   
   if (isCorrect && shouldAutoAdvance) {
     const advanceDelay = 2200; 
-    console.log(`Auto-advance scheduled in ${advanceDelay}ms`);
-    showToast("✓ Correct! Next card soon...");
+    showToast(`✓ Correct! 🔥×${sessionStreak}`);
     
     setTimeout(() => {
         if (currentMode === 'study' || currentMode === 'review') {
@@ -1325,6 +1476,64 @@ function submitAnswer(method) {
         }
     }, advanceDelay);
   }
+}
+
+// --- Session Streak Display ---
+function updateSessionStreakDisplay() {
+  const streakEl = document.getElementById('session-streak');
+  const countEl = document.getElementById('streak-count');
+  if (!streakEl || !countEl) return;
+  
+  if (sessionStreak >= 2) {
+    countEl.textContent = sessionStreak;
+    streakEl.classList.remove('hidden');
+    // Scale fire emoji based on streak
+    const fireEl = streakEl.querySelector('.streak-fire');
+    if (fireEl) {
+      const scale = sessionStreak >= 10 ? 1.5 : sessionStreak >= 5 ? 1.3 : 1;
+      fireEl.style.transform = `scale(${scale})`;
+    }
+    streakEl.style.animation = 'none';
+    void streakEl.offsetHeight; // trigger reflow
+    streakEl.style.animation = 'streakPulse 0.5s ease';
+  } else {
+    streakEl.classList.add('hidden');
+  }
+}
+
+// --- Adaptive Queue Rebuild ---
+function getAdaptiveScore(qId) {
+  const p = progress[qId];
+  if (!p) return -1000; // New questions = highest priority
+  
+  const now = Date.now();
+  const dayMs = 86400000;
+  
+  // Base: lower interval = worse mastery
+  let score = p.interval || 0;
+  
+  // Recent mistakes are extra bad
+  const recentMistakes = (p.recentMistakes || []).filter(t => (now - t) < 3 * dayMs);
+  score -= recentMistakes.length * 500;
+  
+  // Fresh mistakes (< 24h) are MUCH worse
+  const freshMistakes = recentMistakes.filter(t => (now - t) < dayMs);
+  score -= freshMistakes.length * 1000;
+  
+  // Low accuracy = worse
+  const total = (p.correct || 0) + (p.wrong || 0);
+  if (total > 0) {
+    const accuracy = (p.correct || 0) / total;
+    score += accuracy * 200;
+  }
+  
+  return score;
+}
+
+function rebuildAdaptiveQueue() {
+  const remaining = studyQueue.slice(currentStudyIndex);
+  remaining.sort((a, b) => getAdaptiveScore(a.id) - getAdaptiveScore(b.id));
+  studyQueue = [...studyQueue.slice(0, currentStudyIndex), ...remaining];
 }
 
 function addXP(amount) {
@@ -1371,10 +1580,26 @@ function showFeedbackControls() {
   if (currentMode === 'study' || currentMode === 'review') {
     if (!isCorrect) {
       el.nextSection.classList.remove('hidden');
-      let p = progress[currentCard.id] || { interval: 0, efactor: 2.5, reps: 0 };
+      let p = progress[currentCard.id] || { interval: 0, efactor: 2.5, reps: 0, correct: 0, wrong: 0, streak: 0, recentMistakes: [] };
+      const now = Date.now();
+      const dayMs = 86400000;
       p.reps = 0;
       p.interval = 1;
-      p.efactor = Math.max(1.3, p.efactor - 0.2);
+      p.wrong = (p.wrong || 0) + 1;
+      p.streak = 0;
+      
+      // Fresh mistake severity: doubled penalty if mistake within last 24h
+      const recentMistakes = (p.recentMistakes || []).filter(t => (now - t) < dayMs);
+      const efPenalty = recentMistakes.length > 0 ? 0.4 : 0.2;
+      p.efactor = Math.max(1.3, (p.efactor || 2.5) - efPenalty);
+      
+      // Frequent mistake penalty: >3 mistakes in 3 days → floor efactor
+      const freq3d = (p.recentMistakes || []).filter(t => (now - t) < 3 * dayMs);
+      if (freq3d.length > 3) {
+        p.efactor = 1.3;
+        p.interval = 1;
+      }
+      
       p.nextReview = Date.now() + (p.interval * 60 * 1000);
       p.updatedAt = Date.now();
       progress[currentCard.id] = p;
@@ -1391,12 +1616,35 @@ function showFeedbackControls() {
 
 // ---------------- Practice Mode SRS Logic ----------------
 function processPracticeAnswer(quality) {
-  let p = progress[currentCard.id] || { interval: 0, efactor: 2.5, reps: 0 };
+  let p = progress[currentCard.id] || { interval: 0, efactor: 2.5, reps: 0, correct: 0, wrong: 0, streak: 0, recentMistakes: [] };
+  const now = Date.now();
+  const dayMs = 86400000;
   
   if (quality === 0) {
     p.reps = 0;
-    p.interval = 1; 
+    p.interval = 1;
+    p.wrong = (p.wrong || 0) + 1;
+    p.streak = 0;
+    
+    // Track mistake timestamp
+    if (!p.recentMistakes) p.recentMistakes = [];
+    p.recentMistakes.push(now);
+    if (p.recentMistakes.length > 10) p.recentMistakes = p.recentMistakes.slice(-10);
+    
+    // Fresh mistake severity
+    const freshMistakes = p.recentMistakes.filter(t => (now - t) < dayMs);
+    const efPenalty = freshMistakes.length > 1 ? 0.4 : 0.2;
+    p.efactor = Math.max(1.3, (p.efactor || 2.5) - efPenalty);
+    
+    // Frequent mistake penalty
+    const freq3d = p.recentMistakes.filter(t => (now - t) < 3 * dayMs);
+    if (freq3d.length > 3) {
+      p.efactor = 1.3;
+      p.interval = 1;
+    }
   } else {
+    p.correct = (p.correct || 0) + 1;
+    p.streak = (p.streak || 0) + 1;
     p.reps += 1;
     if (p.reps === 1) {
       p.interval = 1440; 
@@ -1404,17 +1652,16 @@ function processPracticeAnswer(quality) {
       p.interval = Math.round(p.interval * p.efactor);
       if (p.interval > 4320) p.interval = 4320; 
     }
+    p.efactor = Math.max(1.3, (p.efactor || 2.5) + 0.1);
   }
   
-  p.efactor = Math.max(1.3, p.efactor + (quality === 1 ? 0.1 : -0.2));
   p.nextReview = Date.now() + (p.interval * 60 * 1000);
-  
+  p.lastAnsweredAt = now;
   p.updatedAt = Date.now();
   progress[currentCard.id] = p;
   syncProgressToServer();
   
   if (currentMode === 'review') {
-      // Only go home if queue is truly empty
       if (studyQueue.length <= 1) goHome();
       else nextCard();
   } else {
@@ -1424,6 +1671,14 @@ function processPracticeAnswer(quality) {
 
 function nextCard() {
   if (currentMode === 'study' || currentMode === 'review') {
+    if (studyQueue.length === 0) {
+      goHome();
+      return;
+    }
+    currentStudyIndex = (currentStudyIndex + 1) % studyQueue.length;
+    currentCard = studyQueue[currentStudyIndex];
+  } else if (currentMode === 'pronunciation') {
+    // Pronunciation mode: cycle through queue
     if (studyQueue.length === 0) {
       goHome();
       return;
@@ -1635,11 +1890,28 @@ function loadSettings() {
   if (el.togShowId) el.togShowId.checked = settings.showId;
   if (el.togAutoAdvance) el.togAutoAdvance.checked = settings.autoAdvance;
   if (el.togSfx) el.togSfx.checked = settings.sfx;
+  
+  // New settings
+  const fontSelect = document.getElementById('setting-font');
+  if (fontSelect) fontSelect.value = settings.chineseFont || 'Noto Sans SC';
+  const randomFontTog = document.getElementById('setting-random-font');
+  if (randomFontTog) randomFontTog.checked = settings.randomFont || false;
+  const lightThemeTog = document.getElementById('setting-light-theme');
+  if (lightThemeTog) lightThemeTog.checked = settings.lightTheme || false;
+  const imgBgTog = document.getElementById('setting-image-bg');
+  if (imgBgTog) imgBgTog.checked = settings.imageBackground || false;
+  
+  // Apply theme on load
+  applyTheme(settings.lightTheme);
 }
 
 function saveSettings() {
   if (!username) return;
   localStorage.setItem('srs_settings_' + username, JSON.stringify(settings));
+}
+
+function applyTheme(isLight) {
+  document.documentElement.setAttribute('data-theme', isLight ? 'light' : 'dark');
 }
 
 function updateStreak() {
@@ -1707,6 +1979,150 @@ setupDisplaySettingListener(el.togOptionsPinyinAfter, 'optionsPinyinAfter');
 setupDisplaySettingListener(el.togShowId, 'showId');
 setupDisplaySettingListener(el.togSfx, 'sfx');
 setupDisplaySettingListener(el.togAutoAdvance, 'autoAdvance');
+
+// --- New Settings Listeners ---
+const fontSelect = document.getElementById('setting-font');
+if (fontSelect) {
+  fontSelect.addEventListener('change', () => {
+    settings.chineseFont = fontSelect.value;
+    saveSettings();
+    if (currentMode !== 'home' && !currentAnswerSelected) renderCard();
+  });
+}
+
+const randomFontTog = document.getElementById('setting-random-font');
+if (randomFontTog) {
+  randomFontTog.addEventListener('change', () => {
+    settings.randomFont = randomFontTog.checked;
+    saveSettings();
+  });
+}
+
+const lightThemeTog = document.getElementById('setting-light-theme');
+if (lightThemeTog) {
+  lightThemeTog.addEventListener('change', () => {
+    settings.lightTheme = lightThemeTog.checked;
+    saveSettings();
+    applyTheme(settings.lightTheme);
+  });
+}
+
+const imgBgTog = document.getElementById('setting-image-bg');
+if (imgBgTog) {
+  imgBgTog.addEventListener('change', () => {
+    settings.imageBackground = imgBgTog.checked;
+    saveSettings();
+    if (currentMode !== 'home') renderCard();
+  });
+}
+
+// --- Pronunciation Mode Button ---
+const btnPron = document.getElementById('btn-pronunciation');
+if (btnPron) {
+  btnPron.onclick = () => {
+    currentMode = 'pronunciation';
+    startMode('pronunciation');
+  };
+}
+
+// --- Pronunciation Self-Judgment Buttons ---
+const btnPronNailed = document.getElementById('pron-nailed');
+const btnPronRetry = document.getElementById('pron-retry');
+const btnPronSkip = document.getElementById('pron-skip');
+
+if (btnPronNailed) {
+  btnPronNailed.onclick = () => {
+    // Nailed it: +8 XP, advance
+    addXP(8);
+    sessionStreak++;
+    updateSessionStreakDisplay();
+    showToast(`🎤 Perfect! +8 XP 🔥×${sessionStreak}`);
+    let p = progress[currentCard.id] || { interval: 0, efactor: 2.5, reps: 0, correct: 0, wrong: 0 };
+    p.correct = (p.correct || 0) + 1;
+    p.streak = (p.streak || 0) + 1;
+    p.reps = (p.reps || 0) + 1;
+    p.efactor = Math.max(1.3, (p.efactor || 2.5) + 0.1);
+    p.interval = Math.min(4320, Math.round((p.interval || 1440) * p.efactor));
+    p.nextReview = Date.now() + (p.interval * 60 * 1000);
+    p.lastAnsweredAt = Date.now();
+    p.updatedAt = Date.now();
+    progress[currentCard.id] = p;
+    syncProgressToServer();
+    nextCard();
+  };
+}
+
+if (btnPronRetry) {
+  btnPronRetry.onclick = () => {
+    // Retry: +1 XP (tried), replay TTS
+    addXP(1);
+    showToast("🔄 Listen again and try...");
+    const correctKey = currentCard.answer;
+    speak(currentCard.options[correctKey].hanzi, null, true);
+  };
+}
+
+if (btnPronSkip) {
+  btnPronSkip.onclick = () => {
+    // Couldn't read: 0 XP, mark as mistake, advance
+    sessionStreak = 0;
+    updateSessionStreakDisplay();
+    showToast("📖 Keep practicing this one!");
+    let p = progress[currentCard.id] || { interval: 0, efactor: 2.5, reps: 0, correct: 0, wrong: 0, recentMistakes: [] };
+    p.wrong = (p.wrong || 0) + 1;
+    p.streak = 0;
+    p.reps = 0;
+    p.interval = 1;
+    p.efactor = Math.max(1.3, (p.efactor || 2.5) - 0.3);
+    if (!p.recentMistakes) p.recentMistakes = [];
+    p.recentMistakes.push(Date.now());
+    p.nextReview = Date.now() + 60000;
+    p.lastAnsweredAt = Date.now();
+    p.updatedAt = Date.now();
+    progress[currentCard.id] = p;
+    syncProgressToServer();
+    nextCard();
+  };
+}
+
+// --- Pronunciation with Mic Support ---
+const btnPronMic = document.getElementById('pron-mic');
+if (btnPronMic && recognition) {
+  btnPronMic.onclick = () => {
+    if (currentMode !== 'pronunciation') return;
+    const correctKey = currentCard.answer;
+    const correctHanzi = currentCard.options[correctKey].hanzi.replace(/\s+/g, '');
+    
+    showToast("🎙 Listening...");
+    
+    const pronRecog = recognition;
+    pronRecog.onresult = (event) => {
+      let transcript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        transcript += event.results[i][0].transcript;
+      }
+      const clean = transcript.replace(/\s+/g, '').toLowerCase();
+      const pronTranscript = document.getElementById('pron-transcript');
+      
+      if (clean.includes(correctHanzi.toLowerCase())) {
+        if (pronTranscript) {
+          pronTranscript.textContent = `✓ "${transcript}" — Perfect!`;
+          pronTranscript.style.color = '#10b981';
+        }
+        pronRecog.stop();
+        // Auto-nailed
+        if (btnPronNailed) btnPronNailed.click();
+      } else {
+        if (pronTranscript) {
+          pronTranscript.textContent = `Heard: "${transcript}" — Try again`;
+          pronTranscript.style.color = '#f59e0b';
+        }
+      }
+    };
+    
+    try { pronRecog.start(); } catch(e) {}
+  };
+}
 
 if (el.btnStartStudyHero) {
   el.btnStartStudyHero.onclick = () => {
