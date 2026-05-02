@@ -1694,6 +1694,55 @@ function nextCard() {
 el.btnFail.onclick = () => processPracticeAnswer(0); 
 el.btnGood.onclick = () => processPracticeAnswer(1); 
 
+// --- STT Fuzzy Match Helper ---
+function isPinyinMatch(sttHanzi, correctHanzi) {
+    if (!window.pinyinPro || !sttHanzi) {
+        return sttHanzi.includes(correctHanzi);
+    }
+    try {
+        let sttPinyinNum = window.pinyinPro.pinyin(sttHanzi, { toneType: 'num', v: true });
+        let correctPinyinNum = window.pinyinPro.pinyin(correctHanzi, { toneType: 'num', v: true });
+        
+        let sttSyls = sttPinyinNum.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().split(/\s+/);
+        let targetSyls = correctPinyinNum.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().split(/\s+/);
+        
+        if(Math.abs(sttSyls.length - targetSyls.length) > 3) return false;
+        
+        let sttLetters = sttSyls.join('').replace(/[0-9]/g, '');
+        let targetLetters = targetSyls.join('').replace(/[0-9]/g, '');
+        
+        let matrix = [];
+        for(let i=0; i<=targetLetters.length; i++) matrix[i] = [i];
+        for(let j=0; j<=sttLetters.length; j++) matrix[0][j] = j;
+        for(let i=1; i<=targetLetters.length; i++){
+            for(let j=1; j<=sttLetters.length; j++){
+                if(targetLetters.charAt(i-1) == sttLetters.charAt(j-1)) {
+                    matrix[i][j] = matrix[i-1][j-1];
+                } else {
+                    matrix[i][j] = Math.min(matrix[i-1][j-1] + 1, Math.min(matrix[i][j-1] + 1, matrix[i-1][j] + 1));
+                }
+            }
+        }
+        let editDist = matrix[targetLetters.length][sttLetters.length];
+        let letterAccuracy = 1 - (editDist / Math.max(sttLetters.length, targetLetters.length));
+        
+        let toneMatches = 0;
+        let limit = Math.min(sttSyls.length, targetSyls.length);
+        for(let i=0; i<limit; i++) {
+            let sTone = sttSyls[i].match(/[0-9]/);
+            let tTone = targetSyls[i].match(/[0-9]/);
+            sTone = sTone ? sTone[0] : '5';
+            tTone = tTone ? tTone[0] : '5';
+            if(sTone === tTone) toneMatches++;
+        }
+        let toneAccuracy = limit === 0 ? 1 : toneMatches / targetSyls.length;
+        
+        return letterAccuracy >= 0.8 && toneAccuracy >= 0.5;
+    } catch(e) {
+        return sttHanzi.includes(correctHanzi);
+    }
+}
+
 // ---------------- Web Speech API (TTS & STT) ----------------
 const synth = window.speechSynthesis;
 let recognition = null;
@@ -1747,7 +1796,7 @@ if (recognition) {
     }
     
     // Direct pronunciation match
-    if (!selectedKey && cleanTranscript.includes(correctHanzi.toLowerCase())) {
+    if (!selectedKey && isPinyinMatch(cleanTranscript, correctHanzi.toLowerCase())) {
         isCorrect = true;
         selectedKey = correctKey;
     }
@@ -1759,7 +1808,7 @@ if (recognition) {
           currentSelectedKey = selectedKey;
           submitAnswer('voice'); 
       } else if (testStep === 2) {
-          if (cleanTranscript.includes(correctHanzi.toLowerCase())) {
+          if (isPinyinMatch(cleanTranscript, correctHanzi.toLowerCase())) {
               el.voiceTranscript.textContent = `✓ Perfect Pronunciation! (+5 bonus XP)`;
               el.voiceTranscript.style.color = "#10b981";
               recognition.stop();
@@ -2019,10 +2068,13 @@ if (imgBgTog) {
 // --- Pronunciation Mode Button ---
 const btnPron = document.getElementById('btn-pronunciation');
 if (btnPron) {
-  btnPron.onclick = () => {
+  const startPron = (e) => {
+    if(e && e.cancelable) e.preventDefault();
     currentMode = 'pronunciation';
     startMode('pronunciation');
   };
+  btnPron.addEventListener('click', startPron);
+  btnPron.addEventListener('touchstart', startPron, {passive: false});
 }
 
 // --- Pronunciation Self-Judgment Buttons ---
